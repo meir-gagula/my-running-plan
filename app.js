@@ -55,7 +55,7 @@ function sessionCard(s, big) {
   const d = E.describe(s), tg = s.status === 'done' ? '<span class="tag ok">בוצע</span>' : s.status === 'skipped' ? '<span class="tag">לא בוצע</span>' : s.postponed ? '<span class="tag warn">נדחה לעוד היום</span>' : '';
   let h = '<div class="card"><h2>' + esc(d.title) + tg + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + ' · כ-' + d.minutes + ' דקות · שלב ' + s.level + '</div>';
   if (big || s.status === 'planned') h += '<ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul><div class="tip">' + esc(d.tip) + '</div>';
-  if (s.status === 'planned') h += '<div class="row"><button class="b coral" data-act="done" data-sid="' + s.id + '">✅ בוצע</button><button class="b alt" data-act="later" data-sid="' + s.id + '">⏰ היום, אחר כך</button><button class="b alt" data-act="unsure" data-sid="' + s.id + '">🤔 לא בטוח</button></div>';
+  if (s.status === 'planned') h += '<div class="row"><button class="b coral" style="flex-basis:100%" data-act="livestart" data-sid="' + s.id + '">▶️ התחל אימון</button><button class="b alt" data-act="done" data-sid="' + s.id + '">✅ בוצע</button><button class="b alt" data-act="later" data-sid="' + s.id + '">⏰ היום, אחר כך</button><button class="b alt" data-act="unsure" data-sid="' + s.id + '">🤔 לא בטוח</button></div>';
   return h + '</div>';
 }
 
@@ -189,9 +189,9 @@ function saveWeight(raw) {
 
 /* ---------- אימון בוצע ---------- */
 const RPE = ['', 'קל מאוד', 'קל מאוד', 'קל', 'קל', 'בינוני (אפשר לדבר)', 'בינוני', 'מאמץ', 'קשה', 'קשה מאוד', 'מקסימום'];
-function doneSheet(sid) {
+function doneSheet(sid, mins) {
   const s = st.sessions.find(x => x.id === sid), d = E.describe(s), run = E.isRun(s.kind);
-  sheet('<h2>' + esc(d.title) + ' – איך היה?</h2><label for="f-min">כמה דקות בפועל?</label><input id="f-min" type="number" inputmode="numeric" value="' + d.minutes + '">' +
+  sheet('<h2>' + esc(d.title) + ' – איך היה?</h2><label for="f-min">כמה דקות בפועל?</label><input id="f-min" type="number" inputmode="numeric" value="' + (mins || d.minutes) + '">' +
     (run ? '<label for="f-km">מרחק בק"מ (אם ידוע, אפשר לדלג)</label><input id="f-km" type="number" inputmode="decimal" step="0.1">' : '') +
     '<label for="f-rpe">כמה קשה זה היה? <span id="f-rpe-t">5 – ' + RPE[5] + '</span></label><input id="f-rpe" type="range" min="1" max="10" value="5"><label><input type="checkbox" id="f-pain"> היה כאב חד או כאב שמטריד</label>' +
     '<div class="row"><button class="b coral" data-act="savedone" data-sid="' + sid + '">שמירה</button><button class="b alt" data-act="close">ביטול</button></div>');
@@ -290,6 +290,7 @@ function later(sid) { E.applyAction(st, { type: 'today', sid }); const s = st.se
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act, sid = el.dataset.sid;
+  if (liveClick(a, el)) return;
   if (a === 'tab') { tab = el.dataset.v; if (tab === 'week') viewWeek = null; render(); }
   else if (a === 'done') doneSheet(sid);
   else if (a === 'savedone') saveDone(sid);
@@ -314,6 +315,7 @@ document.addEventListener('click', e => {
   else if (a === 'exportshare') { const sh = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Share; if (!sh) return toast('שיתוף לא זמין'); sh.share({ title: 'גיבוי אימונים', text: JSON.stringify(st), dialogTitle: 'גיבוי' }).catch(() => {}); }
   else if (a === 'importpaste') sheet('<h2>שחזור מגיבוי</h2><div class="mut">הדבק כאן את טקסט הגיבוי.</div><textarea id="pastebox" rows="6" style="margin-top:8px"></textarea><div class="row"><button class="b coral" data-act="doimport">שחזור</button><button class="b alt" data-act="close">ביטול</button></div>');
   else if (a === 'doimport') { try { const o = JSON.parse($('#pastebox').value); if (!o.sessions || !o.settings) throw 0; st = Object.assign(E.newState(), o); save(); closeSheet(); render(); toast('שוחזר'); } catch (x) { toast('הטקסט לא תקין'); } }
+  else if (a === 'livestart') liveStart(sid);
   else if (a === 'ics') downloadICS();
   else if (a === 'close') closeSheet();
   else if (a === 'detail') { e.preventDefault(); const s = st.sessions.find(x => x.id === sid), d = E.describe(s); sheet('<h2>' + esc(d.title) + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + '</div><ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul><div class="tip">' + esc(d.tip) + '</div><div class="row">' + (s.status === 'planned' ? '<button class="b coral" data-act="done" data-sid="' + sid + '">✅ בוצע</button><button class="b alt" data-act="unsure" data-sid="' + sid + '">🤔 לא בטוח</button>' : '') + '<button class="b alt" data-act="close">סגירה</button></div>'); }
@@ -383,8 +385,129 @@ function backupCard() {
     : '<div class="row"><button class="b alt" data-act="export">גיבוי לקובץ</button><label class="b alt" style="margin:0">שחזור מקובץ<input type="file" id="imp" accept=".json" hidden></label></div></div>');
 }
 
+/* ---------- מצב אימון: שעון ספירה לאחור, שלבים, צלילים ---------- */
+const LIVE_KEY = 'run_live_v1';
+let live = null, liveT = null, wl = null, actx = null;
+const segSec = g => g.sec == null ? 40 : g.sec;                 // סט ידני נחשב כ-40 שניות בסיכום
+const mmss = ms => { const t = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(t / 60); return m + ':' + String(t % 60).padStart(2, '0'); };
+const KCOL = { run: '#f5b700', walk: '#16213a', set: '#3b3f8f', rest: '#5d6882' };
+const KTXT = { run: '#16213a', walk: '#eef1f7', set: '#fff', rest: '#fff' };
+const KEMO = { run: '🏃', walk: '🚶', set: '💪', rest: '😮‍💨' };
+function durHe(sec) {
+  const m = sec / 60; if (sec < 60) return sec + ' שניות';
+  if (m === 1) return 'דקה'; if (m === 2) return 'שתי דקות'; if (m === 1.5) return 'דקה וחצי'; if (m === 2.5) return 'שתי דקות וחצי';
+  return Number.isInteger(m) ? m + ' דקות' : Math.round(sec / 60) + ' דקות';
+}
+function liveSave() { try { if (live) localStorage.setItem(LIVE_KEY, JSON.stringify(live)); else localStorage.removeItem(LIVE_KEY); } catch (e) {} }
+async function lockScreen() { try { if ('wakeLock' in navigator) wl = await navigator.wakeLock.request('screen'); } catch (e) {} }
+function unlockScreen() { try { if (wl) wl.release(); } catch (e) {} wl = null; }
+function beep(freq, ms, delay) {
+  if (!st.settings.liveSound && st.settings.liveSound !== undefined) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = actx.currentTime + (delay || 0) / 1000, o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = freq; o.type = 'sine'; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.6, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
+    o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + ms / 1000 + 0.05);
+  } catch (e) {}
+}
+function speak(text) {
+  if (st.settings.liveSound === false) return;
+  try { if ('speechSynthesis' in window) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'he-IL'; u.rate = 1; speechSynthesis.speak(u); } } catch (e) {}
+}
+function vibe(p) { if (st.settings.liveVibe !== false) try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+function cueFor(g) {
+  if (g.k === 'run') { beep(988, 180); beep(1319, 300, 230); vibe([250, 120, 250]); speak('ריצה. ' + (g.sec ? durHe(g.sec) : '')); }
+  else if (g.k === 'walk') { beep(523, 450); vibe([500]); speak('הליכה. ' + (g.sec ? durHe(g.sec) : '')); }
+  else if (g.k === 'set') { beep(784, 200); vibe([200]); speak(g.label + '. ' + g.sub.split(' · ')[0]); }
+  else { beep(440, 300); vibe([200]); speak('מנוחה'); }
+}
+function liveStart(sid) {
+  const s = st.sessions.find(x => x.id === sid), segs = E.segmentsFor(s); if (!segs.length) return toast('אין מצב אימון לאימון הזה');
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume && actx.resume(); } catch (e) {}
+  live = { sid, segs, idx: 0, segStart: Date.now(), pausedAt: null, done: false, startedAt: Date.now(), activeMs: 0, manualMs: 0 };
+  liveSave(); lockScreen(); liveShow(); cueFor(segs[0]);
+  clearInterval(liveT); liveT = setInterval(liveTick, 250);
+}
+function liveResume() {
+  try { const r = localStorage.getItem(LIVE_KEY); if (!r) return; live = JSON.parse(r); } catch (e) { live = null; return; }
+  if (!live || live.done || Date.now() - live.startedAt > 4 * 3600 * 1000 || !st.sessions.find(x => x.id === live.sid && x.status === 'planned')) { live = null; liveSave(); return; }
+  lockScreen(); liveShow(); clearInterval(liveT); liveT = setInterval(liveTick, 250);
+}
+function liveElapsedInSeg() { return (live.pausedAt || Date.now()) - live.segStart; }
+function liveAdvance(toIdx, silent) {
+  const g = live.segs[live.idx];
+  live.activeMs += Math.min(liveElapsedInSeg(), g.sec == null ? liveElapsedInSeg() : g.sec * 1000);
+  if (toIdx >= live.segs.length) { live.done = true; live.idx = live.segs.length - 1; liveSave(); liveFinishScreen(); return; }
+  live.idx = Math.max(0, toIdx); live.segStart = live.pausedAt ? live.pausedAt : Date.now(); liveSave();
+  if (!silent) cueFor(live.segs[live.idx]);
+}
+function liveTick() {
+  if (!live || live.done || live.pausedAt) { liveDraw(); return; }
+  let guard = 0, moved = false;
+  while (guard++ < 200) {
+    const g = live.segs[live.idx];
+    if (g.sec == null) break;
+    const rem = g.sec * 1000 - (Date.now() - live.segStart);
+    if (rem > 0) {
+      const sec = Math.ceil(rem / 1000);
+      if (sec <= 3 && live.lastTick !== live.idx + ':' + sec) { live.lastTick = live.idx + ':' + sec; beep(880, 90); }
+      break;
+    }
+    const next = live.idx + 1;                                      // מעבר לשלב הבא (גם אם האפליקציה הייתה ברקע, מדלגים על כמה שלבים)
+    live.activeMs += g.sec * 1000;
+    if (next >= live.segs.length) { live.done = true; liveSave(); liveFinishScreen(); return; }
+    live.idx = next; live.segStart += g.sec * 1000; moved = true;
+  }
+  if (moved) { liveSave(); cueFor(live.segs[live.idx]); }
+  liveDraw();
+}
+function liveShow() { const el = $('#live'); el.hidden = false; document.body.style.overflow = 'hidden'; liveDraw(true); }
+function liveClose() { clearInterval(liveT); liveT = null; unlockScreen(); live = null; liveSave(); const el = $('#live'); el.hidden = true; el.innerHTML = ''; document.body.style.overflow = ''; try { speechSynthesis.cancel(); } catch (e) {} }
+function liveDraw(force) {
+  const el = $('#live'); if (!live || el.hidden) return;
+  const g = live.segs[live.idx], s = st.sessions.find(x => x.id === live.sid), d = E.describe(s);
+  const el0 = liveElapsedInSeg(), rem = g.sec == null ? null : g.sec * 1000 - el0;
+  const totalMs = live.segs.reduce((a, x) => a + segSec(x) * 1000, 0), doneMs = live.segs.slice(0, live.idx).reduce((a, x) => a + segSec(x) * 1000, 0) + Math.min(el0, segSec(g) * 1000);
+  const next = live.segs[live.idx + 1];
+  const timeTxt = g.sec == null ? mmss(el0).replace(/^/, '') : mmss(rem);
+  if (force || el.dataset.idx !== String(live.idx) || el.dataset.p !== String(!!live.pausedAt)) {
+    el.dataset.idx = live.idx; el.dataset.p = String(!!live.pausedAt);
+    el.style.background = KCOL[g.k]; el.style.color = KTXT[g.k];
+    let rows = live.segs.map((x, i) => '<div class="lr ' + (i < live.idx ? 'ld' : i === live.idx ? 'lc' : '') + '" ' + (i === live.idx ? 'id="lcur"' : '') + '><span>' + (i < live.idx ? '✓' : i === live.idx ? '●' : '○') + '</span><span class="lt">' + KEMO[x.k] + ' ' + esc(x.label) + (x.sub && x.k !== 'walk' && x.k !== 'run' ? ' <small>' + esc(x.sub.split(' · ')[0]) + '</small>' : '') + '</span><span>' + (x.sec == null ? 'סט' : mmss(x.sec * 1000)) + '</span></div>').join('');
+    el.innerHTML = '<div class="lt-top"><div><b>' + esc(d.title) + '</b><div class="lm">סה״כ <span id="lsum"></span> מתוך ' + mmss(totalMs) + '</div></div><div class="lbtns"><button data-act="liveopt" data-o="liveSound" aria-label="קול">' + (st.settings.liveSound === false ? '🔇' : '🔊') + '</button><button data-act="liveopt" data-o="liveVibe" aria-label="רטט">' + (st.settings.liveVibe === false ? '📴' : '📳') + '</button></div></div>' +
+      '<div class="lbar"><i id="lbari"></i></div>' +
+      '<div class="lmain"><div class="lk">' + KEMO[g.k] + ' ' + esc(g.label) + (live.pausedAt ? ' · מושהה' : '') + '</div><div class="lbig" id="lbig"></div><div class="ls">' + esc(g.sub || '') + '</div>' +
+      (g.sec == null && !live.pausedAt ? '<button class="lset" data-act="liveset">סיימתי את הסט ✓</button>' : '') +
+      '<div class="ln">' + (next ? 'הבא: ' + KEMO[next.k] + ' ' + esc(next.label) + ' · ' + (next.sec == null ? 'סט' : mmss(next.sec * 1000)) : 'זה השלב האחרון') + '</div></div>' +
+      '<div class="lctl"><button data-act="liveprev" aria-label="שלב קודם">⏮</button><button class="lpp" data-act="livepause" aria-label="השהיה">' + (live.pausedAt ? '▶' : '⏸') + '</button><button data-act="livenext" aria-label="שלב הבא">⏭</button></div>' +
+      '<div class="llist">' + rows + '</div><div class="lend"><button data-act="liveend">סיום האימון</button></div>';
+    const c = $('#lcur'); if (c) c.scrollIntoView({ block: 'center' });
+  }
+  const big = $('#lbig'); if (big) big.textContent = timeTxt;
+  const sum = $('#lsum'); if (sum) sum.textContent = mmss(doneMs);
+  const bi = $('#lbari'); if (bi) bi.style.width = Math.min(100, doneMs / totalMs * 100) + '%';
+}
+function liveFinishScreen() {
+  clearInterval(liveT); liveT = null; unlockScreen();
+  const el = $('#live'), mins = Math.max(1, Math.round(live.activeMs / 60000)); el.style.background = '#2f7d57'; el.style.color = '#fff'; el.dataset.idx = 'fin';
+  beep(784, 200); beep(988, 200, 250); beep(1319, 500, 500); vibe([300, 150, 300, 150, 600]); speak('סיימת. כל הכבוד');
+  el.innerHTML = '<div class="lmain" style="justify-content:center"><div class="lk">🎉 סיימת!</div><div class="lbig" style="font-size:22vw">' + mins + '</div><div class="ls">דקות אימון</div><div class="row" style="margin-top:24px;flex-direction:column"><button class="b coral" data-act="livesave">שמירה כאימון שבוצע</button><button class="b alt" style="color:#fff;border-color:#fff" data-act="liveexit">יציאה בלי לשמור</button></div></div>';
+}
+function liveClick(a, el) {
+  if (!live) return false;
+  if (a === 'livepause') { if (live.pausedAt) { live.segStart += Date.now() - live.pausedAt; live.pausedAt = null; lockScreen(); } else live.pausedAt = Date.now(); liveSave(); liveDraw(true); return true; }
+  if (a === 'livenext') { liveAdvance(live.idx + 1); liveDraw(true); return true; }
+  if (a === 'liveprev') { const el0 = liveElapsedInSeg(); if (el0 > 3000) { live.segStart = live.pausedAt || Date.now(); liveSave(); } else if (live.idx > 0) { live.idx--; live.segStart = live.pausedAt || Date.now(); liveSave(); } liveDraw(true); return true; }
+  if (a === 'liveset') { liveAdvance(live.idx + 1); liveDraw(true); return true; }
+  if (a === 'liveopt') { const o = el.dataset.o; st.settings[o] = st.settings[o] === false ? true : false; save(); liveDraw(true); return true; }
+  if (a === 'liveend') { const mins = Math.max(1, Math.round((live.activeMs + liveElapsedInSeg()) / 60000)); sheet('<h2>לסיים את האימון?</h2><div class="mut">עברו ' + mins + ' דקות.</div><div class="row" style="flex-direction:column"><button class="b coral" data-act="livesaveearly">סיום ושמירה כאימון שבוצע</button><button class="b alt" data-act="close">המשך לאמן</button><button class="b alt" data-act="liveexit">יציאה בלי לשמור</button></div>'); return true; }
+  if (a === 'livesave' || a === 'livesaveearly') { const sid = live.sid, mins = Math.max(1, Math.round((live.activeMs + (a === 'livesaveearly' ? liveElapsedInSeg() : 0)) / 60000)); liveClose(); closeSheet(); render(); doneSheet(sid, mins); return true; }
+  if (a === 'liveexit') { liveClose(); closeSheet(); render(); return true; }
+  return false;
+}
+
 /* ---------- אתחול ---------- */
-maintain(); render();
+maintain(); render(); liveResume();
 if (!NATIVE && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
   navigator.serviceWorker.addEventListener('message', e => handleAct(e.data.act, e.data.sid));
@@ -392,6 +515,6 @@ if (!NATIVE && 'serviceWorker' in navigator) {
 const q = new URLSearchParams(location.search);
 if (q.get('act')) { handleAct(q.get('act'), q.get('sid')); history.replaceState(null, '', location.pathname); }
 if (!NATIVE) { setInterval(tick, 30000); tick(); } else nativeInit();
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { maintain(); if ($('#sheet').hidden) render(); tick(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && live && !live.done) { lockScreen(); liveTick(); } if (!document.hidden) { maintain(); if ($('#sheet').hidden) render(); tick(); } });
 window.__app = { get st() { return st; }, render };
 })();

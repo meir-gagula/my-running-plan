@@ -92,6 +92,31 @@ function describe(s) {
     tip: 'מנוחה של דקה בין סטים. טכניקה נקייה חשובה יותר ממספר החזרות. אם יש כאב חד, עוצרים.' };
 }
 
+/* ---------- שלבי האימון למצב אימון (שעון ספירה) ---------- */
+function segmentsFor(s) {
+  if (s.kind === 'race') return [];
+  if (isRun(s.kind)) {
+    const w = workoutFor(s), segs = [{ k: 'walk', sec: 300, label: 'חימום: הליכה מהירה', tag: 'warm' }];
+    if (w.cont) segs.push({ k: 'run', sec: Math.round(w.cont * 60), label: 'ריצה קלה', sub: w.cont + ' דקות רצוף' });
+    else for (let i = 1; i <= w.reps; i++) {
+      segs.push({ k: 'run', sec: Math.round(w.run * 60), label: 'ריצה קלה', sub: 'חזרה ' + i + ' מתוך ' + w.reps });
+      if (i < w.reps) segs.push({ k: 'walk', sec: Math.round(w.walk * 60), label: 'הליכה', sub: 'חזרה ' + i + ' מתוך ' + w.reps });
+    }
+    segs.push({ k: 'walk', sec: 300 + (w.cont ? 0 : Math.round(w.walk * 60)), label: 'קירור: הליכה', tag: 'cool' });   // ההליכה האחרונה מתמזגת עם הקירור
+    return segs;
+  }
+  const t = tierOf(s.level), segs = [{ k: 'walk', sec: 180, label: 'חימום: הליכה במקום ותנועות רגליים', tag: 'warm' }];
+  STR[s.kind].forEach((e, ei, arr) => {
+    const m = /^(\d+)×(.*)$/.exec(e[1][t]), sets = m ? +m[1] : 1, detail = m ? m[2].trim() : e[1][t], timed = /^(\d+) שניות/.exec(detail);
+    for (let i = 1; i <= sets; i++) {
+      segs.push({ k: 'set', sec: timed ? +timed[1] : null, label: e[0], sub: 'סט ' + i + ' מתוך ' + sets + ' · ' + detail });
+      const last = i === sets && ei === arr.length - 1;
+      if (!last) segs.push({ k: 'rest', sec: i < sets ? 45 : 60, label: 'מנוחה', sub: i < sets ? 'הסט הבא: ' + e[0] : 'התרגיל הבא: ' + arr[ei + 1][0] });
+    }
+  });
+  return segs;
+}
+
 /* ---------- מצב התחלתי ---------- */
 function newState() {
   return {
@@ -383,6 +408,6 @@ function buildICS(st, today) {
 }
 
 root.Engine = { CFG, DAYNAMES, LEVELS, KIND_LABEL, pd, iso, addDays, dow, diff, weekStart, weekNo, weekStartOf, weekDates, dayName, fmt, isRun, isStr,
-  describe, workoutFor, previewWeek, newState, proposeWeek, applyWeek, weekStats, reviewWeek, closeWeek, behindBy, markDone, missedSessions, suggest, applyAction,
+  describe, workoutFor, previewWeek, segmentsFor, newState, proposeWeek, applyWeek, weekStats, reviewWeek, closeWeek, behindBy, markDone, missedSessions, suggest, applyAction,
   activityImpact, replaceWithActivity, bmi, bmiLabel, weighDay, weighDue, round1, weightList, weightSummary, weightMessage, streak, totals, cheer, buildICS, blocked, runCountLeft };
 })(typeof window !== 'undefined' ? window : globalThis);
