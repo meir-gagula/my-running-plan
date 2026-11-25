@@ -89,19 +89,43 @@ function vToday() {
 }
 
 /* ---------- שבוע ---------- */
+let viewWeek = null;
+function weekRows(wn) {   // שורות לשבוע: מה שנשמר, או הצעת האפליקציה / תחזית
+  const planned = st.plannedWeeks.indexOf(wn) >= 0, real = st.sessions.filter(s => s.week === wn && s.kind !== 'race' && !s.dropped);
+  if (planned || real.length) return { list: real, kind: 'real' };
+  const cw = curWeek(), lvl = wn <= cw ? st.level : Math.min(16, st.level + (wn - cw));
+  return { list: E.previewWeek(lvl, wn), kind: wn === cw ? 'proposal' : 'forecast', level: lvl };
+}
 function vWeek() {
-  $('#title').textContent = 'השבוע'; const t = todayIso(), wn = curWeek();
-  let h = '<div class="card"><h2>שבוע ' + wn + ' מתוך 16</h2><div class="mut">שלב ' + st.level + ' · מתחיל בשישי ' + E.fmt(E.weekStartOf(wn)) + '</div>';
+  $('#title').textContent = 'השבוע'; const t = todayIso(), cw = curWeek(), wn = Math.min(16, Math.max(1, viewWeek || cw));
+  const r = weekRows(wn), race = st.sessions.find(s => s.kind === 'race');
+  let h = '<div class="card"><div class="row" style="margin:0 0 8px;align-items:center"><button class="b alt sm" data-act="weekgo" data-wn="' + (wn - 1) + '" ' + (wn <= 1 ? 'disabled' : '') + ' aria-label="השבוע הקודם">›</button><div style="flex:3;text-align:center"><h2 style="margin:0">שבוע ' + wn + ' מתוך 16</h2><div class="mut">' + E.fmt(E.weekStartOf(wn)) + ' עד ' + E.fmt(E.addDays(E.weekStartOf(wn), 6)) + (wn === cw ? ' · השבוע הנוכחי' : '') + '</div></div><button class="b alt sm" data-act="weekgo" data-wn="' + (wn + 1) + '" ' + (wn >= 16 ? 'disabled' : '') + ' aria-label="השבוע הבא">‹</button></div>';
+  if (r.kind === 'proposal') h += '<div class="tip">זו הצעה של האפליקציה, עוד לא אושרה. אם כל הימים פנויים, זה הסידור. כדי לבחור ימים אחרים או לאשר, לחץ על "תכנון השבוע".</div>';
+  if (r.kind === 'forecast') h += '<div class="tip">תחזית בלבד (שלב ' + r.level + '), בהנחה שהכול מתקדם כמתוכנן. היא תתעדכן לפי הביצוע בפועל.</div>';
   E.weekDates(wn).forEach(d => {
-    const ss = st.sessions.filter(s => s.date === d);
+    const ss = r.list.filter(s => s.date === d);
+    if (wn === 16 && d === E.CFG.race) ss.push(race);
     h += '<div class="wk' + (d === t ? ' today' : '') + '"><div class="d">' + E.dayName(d) + '<small>' + E.fmt(d) + '</small></div><div class="t">';
     if (!ss.length) h += '<span class="mut">מנוחה</span>';
-    ss.forEach(s => { const x = E.describe(s); h += '<div class="st-' + s.status + '"><a href="#" data-act="detail" data-sid="' + s.id + '" style="color:inherit">' + esc(x.title) + '</a> <span class="mut">' + x.minutes + ' דק׳</span>' + (s.status === 'done' ? ' ✓' : '') + '</div>'; });
+    ss.forEach(s => {
+      const x = E.describe(s);
+      if (s.status === 'preview') h += '<details><summary>' + esc(x.title) + ' <span class="mut">' + x.minutes + ' דק׳</span></summary><ul class="l">' + x.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul></details>';
+      else h += '<div class="st-' + s.status + '"><a href="#" data-act="detail" data-sid="' + s.id + '" style="color:inherit">' + esc(x.title) + '</a> <span class="mut">' + x.minutes + ' דק׳</span>' + (s.status === 'done' ? ' ✓' : '') + '</div>';
+    });
     h += '</div></div>';
   });
-  h += '<div class="row"><button class="b alt" data-act="plan" data-wn="' + wn + '">תכנון מחדש של השבוע</button><button class="b alt" data-act="ics">עדכון היומן</button></div></div>';
-  h += '<div class="card"><h3>רשמת משחק או פעילות אחרת?</h3><div class="mut">טניס, כדורסל וכדומה. אפשר שזה יחליף ריצה קלה.</div><div class="row"><button class="b alt" data-act="activity">רישום פעילות</button></div></div>';
+  h += '<div class="row">' + (wn === cw ? '<button class="b coral" data-act="plan" data-wn="' + wn + '">' + (r.kind === 'real' ? 'תכנון מחדש של השבוע' : 'תכנון השבוע') + '</button>' : '') + '<button class="b alt" data-act="allweeks">כל השבועות</button>' + (wn !== cw ? '<button class="b alt" data-act="weekgo" data-wn="' + cw + '">לשבוע הנוכחי</button>' : '') + '</div></div>';
+  h += '<div class="card"><h3>רשמת משחק או פעילות אחרת?</h3><div class="mut">טניס, כדורסל וכדומה. אפשר שזה יחליף ריצה קלה.</div><div class="row"><button class="b alt" data-act="activity">רישום פעילות</button><button class="b alt" data-act="ics">עדכון יומן (לא חובה)</button></div></div>';
   $('#main').innerHTML = h;
+}
+function allWeeksSheet() {
+  const cw = curWeek(); let h = '<h2>כל השבועות</h2><div class="mut">שבוע מתחיל בשישי. המרוץ: שישי 19.3.</div>';
+  for (let w = 1; w <= 16; w++) {
+    const r = weekRows(w), lvl = r.kind === 'real' ? (r.list[0] ? r.list[0].level : st.level) : r.level, long = r.list.find(s => s.kind === 'long') || r.list.find(s => s.kind === 'easy1');
+    const x = E.weekStats(st, w), status = r.kind === 'real' ? (w < cw ? 'בוצע ' + x.runCredit + ' מתוך ' + x.runPlanned + ' ריצות' : 'מתוכנן') : (r.kind === 'proposal' ? 'הצעה' : 'תחזית');
+    h += '<div class="card" data-act="weekgo" data-wn="' + w + '" style="cursor:pointer;' + (w === cw ? 'border-color:var(--coral)' : '') + '"><h3>שבוע ' + w + ' · ' + E.fmt(E.weekStartOf(w)) + ' <span class="tag' + (w === cw ? ' coral' : '') + '">' + status + '</span></h3><div class="mut">שלב ' + lvl + (long ? ' · ' + (long.kind === 'long' ? 'ארוכה' : 'קלה') + ': ' + E.describe(long).lines[1] : '') + '</div></div>';
+  }
+  h += '<div class="row"><button class="b alt" data-act="close">סגירה</button></div>'; sheet(h);
 }
 
 /* ---------- התקדמות ---------- */
@@ -267,7 +291,7 @@ function later(sid) { E.applyAction(st, { type: 'today', sid }); const s = st.se
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act, sid = el.dataset.sid;
-  if (a === 'tab') { tab = el.dataset.v; render(); }
+  if (a === 'tab') { tab = el.dataset.v; if (tab === 'week') viewWeek = null; render(); }
   else if (a === 'done') doneSheet(sid);
   else if (a === 'savedone') saveDone(sid);
   else if (a === 'later') later(sid);
@@ -284,6 +308,8 @@ document.addEventListener('click', e => {
   else if (a === 'editw') { const d = el.dataset.d, w = st.weights.find(x => x.date === d); sheet('<h2>עריכת שקילה מ-' + E.fmt(d) + '</h2><label for="ew">משקל בק"ג (נקודה ומספר אחד אחריה)</label><input id="ew" type="number" inputmode="decimal" step="0.1" value="' + w.kg.toFixed(1) + '"><div class="row"><button class="b coral" data-act="savew" data-d="' + d + '">שמירה</button>' + (st.weights.length > 1 ? '<button class="b alt" data-act="delw" data-d="' + d + '">מחיקה</button>' : '') + '<button class="b alt" data-act="close">ביטול</button></div>'); }
   else if (a === 'savew') { const v = E.round1(+$('#ew').value); if (!(v >= 30 && v <= 300)) return toast('משקל לא סביר'); st.weights.find(x => x.date === el.dataset.d).kg = v; save(); closeSheet(); render(); toast('עודכן: ' + v.toFixed(1)); }
   else if (a === 'delw') { if (st.weights.length > 1) { st.weights = st.weights.filter(x => x.date !== el.dataset.d); save(); closeSheet(); render(); toast('נמחק'); } }
+  else if (a === 'weekgo') { viewWeek = +el.dataset.wn; closeSheet(); tab = 'week'; render(); }
+  else if (a === 'allweeks') allWeeksSheet();
   else if (a === 'ics') downloadICS();
   else if (a === 'close') closeSheet();
   else if (a === 'detail') { e.preventDefault(); const s = st.sessions.find(x => x.id === sid), d = E.describe(s); sheet('<h2>' + esc(d.title) + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + '</div><ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul><div class="tip">' + esc(d.tip) + '</div><div class="row">' + (s.status === 'planned' ? '<button class="b coral" data-act="done" data-sid="' + sid + '">✅ בוצע</button><button class="b alt" data-act="unsure" data-sid="' + sid + '">🤔 לא בטוח</button>' : '') + '<button class="b alt" data-act="close">סגירה</button></div>'); }

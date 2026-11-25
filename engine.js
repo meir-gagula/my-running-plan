@@ -221,6 +221,13 @@ function closeWeek(st, wn) { // סוגר את השבוע שהסתיים: אימ�
 }
 function behindBy(st, wn) { return Math.max(0, wn - st.level); }
 
+// הצעת האפליקציה לשבוע שעוד לא תוכנן (לא נשמרת): כל הימים פנויים
+function previewWeek(level, wn) {
+  if (wn > CFG.lastWeek) return [];
+  const r = proposeWeek({ sessions: [] }, wn, weekDates(wn));
+  return r.options.length ? r.options[0].items.map(it => ({ id: wn + '-' + it.kind, week: wn, kind: it.kind, date: it.date, level, status: 'preview', taper: wn >= CFG.lastWeek })) : [];
+}
+
 /* ---------- אימון שבוצע / החמצה ---------- */
 function markDone(st, sid, log) { const s = st.sessions.find(x => x.id === sid); s.status = 'done'; s.postponed = false; s.log = log; s.seq = (s.seq || 0) + 1; if (log.pain) st.painLog.push(log.date); return s; }
 function missedSessions(st, today) { return st.sessions.filter(s => s.status === 'planned' && s.date < today && s.kind !== 'race' && weekNo(s.date) >= weekNo(today)); }
@@ -376,6 +383,6 @@ function buildICS(st, today) {
 }
 
 root.Engine = { CFG, DAYNAMES, LEVELS, KIND_LABEL, pd, iso, addDays, dow, diff, weekStart, weekNo, weekStartOf, weekDates, dayName, fmt, isRun, isStr,
-  describe, workoutFor, newState, proposeWeek, applyWeek, weekStats, reviewWeek, closeWeek, behindBy, markDone, missedSessions, suggest, applyAction,
+  describe, workoutFor, previewWeek, newState, proposeWeek, applyWeek, weekStats, reviewWeek, closeWeek, behindBy, markDone, missedSessions, suggest, applyAction,
   activityImpact, replaceWithActivity, bmi, bmiLabel, weighDay, weighDue, round1, weightList, weightSummary, weightMessage, streak, totals, cheer, buildICS, blocked, runCountLeft };
 })(typeof window !== 'undefined' ? window : globalThis);
