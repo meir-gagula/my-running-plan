@@ -95,8 +95,8 @@ function vWeek() {
 /* ---------- התקדמות ---------- */
 function bars(vals, labels, max, color) {
   const W = 320, H = 130, bw = W / vals.length; let s = '<svg class="chart" viewBox="0 0 ' + W + ' ' + (H + 22) + '" role="img">';
-  vals.forEach((v, i) => { const h = max ? v / max * H : 0; s += '<rect x="' + (i * bw + 3) + '" y="' + (H - h) + '" width="' + (bw - 6) + '" height="' + Math.max(h, 0) + '" rx="3" fill="' + color + '"/><text x="' + (i * bw + bw / 2) + '" y="' + (H + 14) + '" font-size="10" text-anchor="middle" fill="#6f6a62">' + labels[i] + '</text>'; });
-  return s + '<line x1="0" y1="' + H + '" x2="' + W + '" y2="' + H + '" stroke="#e3dccf"/></svg>';
+  vals.forEach((v, i) => { const h = max ? v / max * H : 0; s += '<rect x="' + (i * bw + 3) + '" y="' + (H - h) + '" width="' + (bw - 6) + '" height="' + Math.max(h, 0) + '" rx="3" fill="' + color + '"/><text x="' + (i * bw + bw / 2) + '" y="' + (H + 14) + '" font-size="10" text-anchor="middle" fill="#5d6882">' + labels[i] + '</text>'; });
+  return s + '<line x1="0" y1="' + H + '" x2="' + W + '" y2="' + H + '" stroke="#dbe1ee"/></svg>';
 }
 function vProgress() {
   $('#title').textContent = 'התקדמות'; const x = E.totals(st), cw = Math.min(curWeek(), 16);
@@ -105,9 +105,9 @@ function vProgress() {
   const lag = E.behindBy(st, cw), streak = E.streak(st, todayIso());
   h += '<div class="mut" style="margin-top:6px">' + (lag > 1 ? 'אתה כ-' + lag + ' שלבים מאחורי התוכנית. זה בסדר: במרוץ מותר לשלב הליכה, והמטרה היא לסיים בכיף.' : lag <= 0 && cw > 1 ? 'אתה בקצב התוכנית.' : 'אתה בקצב התוכנית.') + (streak ? ' ' + streak + ' שבועות רצופים עם 2 ריצות ויותר.' : '') + '</div></div>';
   const vals = [], labs = []; for (let w = 1; w <= cw; w++) { vals.push(E.weekStats(st, w).minutes); labs.push(w); }
-  h += '<div class="card"><h3>דקות אימון בכל שבוע</h3>' + bars(vals, labs, Math.max.apply(null, vals.concat([30])), '#ff6f59') + '</div>';
+  h += '<div class="card"><h3>דקות אימון בכל שבוע</h3>' + bars(vals, labs, Math.max.apply(null, vals.concat([30])), '#f5b700') + '</div>';
   const cv = [], cl = []; for (let w = 1; w <= cw; w++) { const s = E.weekStats(st, w); cv.push(s.runPlanned ? Math.round(s.runCredit / s.runPlanned * 100) : 0); cl.push(w); }
-  h += '<div class="card"><h3>אחוז ריצות שבוצעו</h3>' + bars(cv, cl, 100, '#2b2b2b') + '</div>';
+  h += '<div class="card"><h3>אחוז ריצות שבוצעו</h3>' + bars(cv, cl, 100, '#16213a') + '</div>';
   if (st.reviews.length) h += '<div class="card"><h3>סיכומי שבועות</h3>' + st.reviews.slice().reverse().map(r => '<div style="margin:6px 0"><b>שבוע ' + r.week + '</b> · שלב ' + r.from + (r.to !== r.from ? ' ← ' + r.to : '') + '<div class="mut">' + esc(r.why) + '</div></div>').join('') + '</div>';
   $('#main').innerHTML = h;
 }
@@ -122,8 +122,8 @@ function vWeight() {
     const W = 320, H = 140, ks = w.map(p => p.kg), lo = Math.min.apply(null, ks.concat(g.targetKg || 999)) - 1, hi = Math.max.apply(null, ks) + 1;
     const t0 = E.pd(w[0].date), t1 = Math.max(E.pd(w[w.length - 1].date), t0 + 864e5 * 7);
     const px = p => 10 + (E.pd(p.date) - t0) / (t1 - t0) * (W - 20), py = k => 10 + (hi - k) / (hi - lo) * (H - 20);
-    let s = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img"><polyline fill="none" stroke="#2b2b2b" stroke-width="2" points="' + w.map(p => px(p) + ',' + py(p.kg)).join(' ') + '"/>' + w.map(p => '<circle cx="' + px(p) + '" cy="' + py(p.kg) + '" r="4" fill="#ff6f59"/>').join('');
-    if (g.targetKg) s += '<line x1="0" x2="' + W + '" y1="' + py(g.targetKg) + '" y2="' + py(g.targetKg) + '" stroke="#3f7d5a" stroke-dasharray="4 4"/>';
+    let s = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img"><polyline fill="none" stroke="#16213a" stroke-width="2" points="' + w.map(p => px(p) + ',' + py(p.kg)).join(' ') + '"/>' + w.map(p => '<circle cx="' + px(p) + '" cy="' + py(p.kg) + '" r="4" fill="#f5b700"/>').join('');
+    if (g.targetKg) s += '<line x1="0" x2="' + W + '" y1="' + py(g.targetKg) + '" y2="' + py(g.targetKg) + '" stroke="#2f7d57" stroke-dasharray="4 4"/>';
     h += '<div class="card"><h3>מגמה</h3>' + s + '</svg></div>';
   }
   h += '<div class="card"><h3>היסטוריה</h3>' + w.slice().reverse().map(p => '<div class="wk"><div class="d">' + E.fmt(p.date) + '</div><div class="t">' + p.kg.toFixed(1) + ' ק"ג · BMI ' + E.bmi(p.kg, g.heightCm).toFixed(1) + '</div></div>').join('') + '</div>';
