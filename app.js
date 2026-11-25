@@ -62,6 +62,8 @@ function vToday() {
     h += '<div class="card banner"><h2>' + (early ? 'מתחילים ביום שישי ' + E.fmt(E.CFG.start) : 'שבוע חדש: ' + wn + ' מתוך 16') + '</h2><p>' + (early ? 'אפשר כבר עכשיו לתכנן את השבוע הראשון.' : 'עוד לא תכננו את השבוע. נסכם את הקודם ונסדר את הימים.') + '</p><div class="row"><button class="b coral" data-act="plan" data-wn="' + wn + '">לתכנון השבוע</button></div></div>';
   }
   if (st.icsDirty) h += '<div class="card"><h3>היומן לא מעודכן</h3><div class="mut">התוכנית השתנתה. כדי שהתזכורת תקפוץ ביומן בשעה הנכונה, הורד קובץ יומן ופתח אותו.</div><div class="row"><button class="b alt" data-act="ics">עדכון היומן</button></div></div>';
+  const wd = E.weighDue(st, t);
+  if (wd) h += '<div class="card banner"><h2>⚖️ ' + (wd.today ? 'יום שקילה' : 'עוד לא נשקלת השבוע') + '</h2><div class="mut">לפני האימון, בבוקר, אחרי שירותים ולפני אכילה. מספר אחד אחרי הנקודה, למשל 108.4</div><input id="tw" type="number" inputmode="decimal" step="0.1" min="30" max="300" placeholder="' + E.weightList(st).slice(-1)[0].kg.toFixed(1) + '" style="margin-top:8px"><div class="row"><button class="b coral" data-act="todayweight">שמירת משקל</button></div></div>';
   const today = st.sessions.filter(s => s.date === t);
   if (t === E.CFG.race) h += sessionCard(today.find(s => s.kind === 'race'), true);
   else if (today.length) h += today.map(s => sessionCard(s, true)).join('');
@@ -115,7 +117,7 @@ function vWeight() {
   $('#title').textContent = 'משקל'; const w = E.weightList(st), x = E.weightSummary(st), g = st.settings;
   let h = '<div class="kpi"><div><b>' + x.last.kg.toFixed(1) + '</b><span>ק"ג כעת</span></div><div><b>' + (x.change > 0 ? '+' : '') + x.change.toFixed(1) + '</b><span>מההתחלה</span></div><div><b>' + x.bmi.toFixed(1) + '</b><span>BMI</span></div></div>';
   h += '<div class="card"><div class="mut">BMI ' + x.bmi.toFixed(1) + ': ' + E.bmiLabel(x.bmi) + (g.targetKg ? ' · יעד ' + g.targetKg + ' ק"ג (נשארו ' + Math.max(0, x.last.kg - g.targetKg).toFixed(1) + ')' : '') + '</div><p>' + esc(E.weightMessage(st)) + '</p><div class="mut">לפי הרופא והתזונאי: כל יעד משקל וקצב ירידה נקבעים איתם.</div></div>';
-  h += '<div class="card"><h3>שקילה חדשה</h3><label for="wkg">משקל בק"ג (פעם בשבוע, אותו יום ושעה)</label><input id="wkg" type="number" inputmode="decimal" step="0.1" min="30" max="300" value="' + x.last.kg + '"><div class="row"><button class="b coral" data-act="addweight">שמירה</button></div></div>';
+  h += '<div class="card"><h3>שקילה חדשה</h3><label for="wkg">משקל בק"ג, עם נקודה ומספר אחד אחריה (פעם בשבוע, ביום ' + E.dayName(E.weekDates(1)[(E.weighDay(st) - 5 + 7) % 7]) + ')</label><input id="wkg" type="number" inputmode="decimal" step="0.1" min="30" max="300" value="' + x.last.kg.toFixed(1) + '"><div class="row"><button class="b coral" data-act="addweight">שמירה</button></div></div>';
   if (w.length >= 2) {
     const W = 320, H = 140, ks = w.map(p => p.kg), lo = Math.min.apply(null, ks.concat(g.targetKg || 999)) - 1, hi = Math.max.apply(null, ks) + 1;
     const t0 = E.pd(w[0].date), t1 = Math.max(E.pd(w[w.length - 1].date), t0 + 864e5 * 7);
@@ -133,7 +135,7 @@ function vMore() {
   $('#title').textContent = 'עוד'; const g = st.settings;
   const permOk = 'Notification' in window && Notification.permission === 'granted';
   $('#main').innerHTML =
-    '<div class="card"><h3>תזכורות</h3><label for="rem">שעת תזכורת יומית</label><input id="rem" type="time" value="' + g.reminder + '"><label for="wt">שעת שקילה ותכנון בשישי</label><input id="wt" type="time" value="' + g.weighTime + '">' +
+    '<div class="card"><h3>תזכורות</h3><label for="rem">שעת תזכורת יומית</label><input id="rem" type="time" value="' + g.reminder + '"><label for="wd">יום שקילה שבועי (התזכורת באה יחד עם האימון)</label><select id="wd">' + [0,1,2,3,4,5,6].map(i => '<option value="' + i + '"' + (E.weighDay(st) === i ? ' selected' : '') + '>' + E.DAYNAMES[i] + '</option>').join('') + '</select><label for="wt">שעת תזכורת לתכנון בשישי</label><input id="wt" type="time" value="' + g.weighTime + '">' +
     '<div class="row"><button class="b" data-act="ics">⬇️ הורדת קובץ יומן (התזכורת האמינה)</button></div>' +
     '<div class="tip">פתח את הקובץ שירד, ובחר לייבא ליומן Google. התזכורת תקפוץ בשעה שקבעת גם כשהאפליקציה סגורה. אחרי כל שינוי בתוכנית, לחץ שוב כדי לעדכן. אם אחרי העדכון תראה אימון כפול ביומן, מחק את הישן ידנית.</div>' +
     '<div class="row"><button class="b alt" data-act="notif">' + (permOk ? '✅ התראות באפליקציה פעילות' : '🔔 הפעלת התראות באפליקציה') + '</button></div><div class="mut">התראה עם כפתורים (בוצע / אחר כך / לא בטוח) מופיעה רק כשהאפליקציה נפתחה בטלפון אחרי שעת התזכורת. היא לא תחליף ליומן.</div></div>' +
@@ -141,6 +143,13 @@ function vMore() {
     '<div class="card"><h3>גיבוי</h3><div class="mut">הכול נשמר רק בטלפון הזה. מומלץ לגבות מדי פעם.</div><div class="row"><button class="b alt" data-act="export">גיבוי לקובץ</button><label class="b alt" style="margin:0">שחזור מקובץ<input type="file" id="imp" accept=".json" hidden></label></div></div>' +
     '<div class="card"><h3>בטיחות</h3><div class="mut">התוכנית כללית ואינה תחליף לייעוץ רפואי. כאב בחזה, סחרור, קוצר נשימה חריג או כאב חד במפרק הם סיבה לעצור ולפנות לרופא. בגשם ובחושך: נעליים עם אחיזה ובגדים בולטים.</div><div class="row"><button class="b alt sm" data-act="reset">איפוס כל הנתונים</button></div></div>';
   const imp = $('#imp'); if (imp) imp.onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const o = JSON.parse(r.result); if (!o.sessions || !o.settings) throw 0; st = Object.assign(E.newState(), o); save(); toast('שוחזר'); render(); } catch (x) { toast('הקובץ לא תקין'); } }; r.readAsText(f); };
+}
+
+function saveWeight(raw) {
+  const v = E.round1(+String(raw).replace(',', '.'));
+  if (!(v >= 30 && v <= 300)) { toast('משקל לא סביר'); return false; }
+  const t = todayIso(); st.weights = st.weights.filter(w => w.date !== t); st.weights.push({ date: t, kg: v }); save();
+  toast('נשמר: ' + v.toFixed(1) + ' ק"ג'); return true;
 }
 
 /* ---------- אימון בוצע ---------- */
@@ -179,10 +188,9 @@ let plan = { wn: 1, review: null, props: null };
 function planSheet(wn) {
   plan.wn = wn; plan.review = null;
   if (wn > 1 && st.plannedWeeks.indexOf(wn - 1) >= 0 && !st.reviews.some(r => r.week === wn - 1)) E.closeWeek(st, wn - 1);
-  const rv = st.reviews.find(r => r.week === wn - 1), t = todayIso(), dates = E.weekDates(wn), last = E.weightList(st).slice(-1)[0];
+  const rv = st.reviews.find(r => r.week === wn - 1), t = todayIso(), dates = E.weekDates(wn);
   let h = '<h2>תכנון שבוע ' + wn + '</h2>';
   if (rv && wn > 1) { const x = E.weekStats(st, wn - 1); h += '<div class="card"><h3>סיכום שבוע ' + (wn - 1) + '</h3><div>ריצות: ' + x.runCredit + ' מתוך ' + x.runPlanned + ' · כוח: ' + x.strCredit + ' מתוך ' + x.strPlanned + (x.avgRpe ? ' · מאמץ ממוצע ' + x.avgRpe.toFixed(1) : '') + '</div><div class="mut">' + esc(rv.why) + (rv.to !== rv.from ? ' (שלב ' + rv.from + ' ← ' + rv.to + ')' : ' (נשארים בשלב ' + rv.to + ')') + '</div></div>'; }
-  h += '<div class="card"><label for="pw">שקילה השבוע (ק"ג), אפשר לדלג</label><input id="pw" type="number" inputmode="decimal" step="0.1" placeholder="' + last.kg + '"></div>';
   h += '<div class="card"><h3>באילו ימים אתה פנוי?</h3><div class="mut">סמן את הימים שאפשר לאמן בהם. האפליקציה תשבץ ותציע.</div><div class="days">' + dates.map(d => { const past = d < t; return '<label class="' + (past ? '' : 'on') + '" data-day="' + d + '"><input type="checkbox" value="' + d + '" ' + (past ? 'disabled' : 'checked') + '>' + E.dayName(d) + '<br><small>' + E.fmt(d) + '</small></label>'; }).join('') + '</div></div>';
   h += '<div id="props"></div><div class="row"><button class="b coral" data-act="propose">הצע לי תוכנית</button><button class="b alt" data-act="close">סגירה</button></div>';
   sheet(h);
@@ -190,7 +198,6 @@ function planSheet(wn) {
 }
 function propose() {
   const avail = Array.from(document.querySelectorAll('#sheet .days input:checked')).map(i => i.value);
-  const pw = +$('#pw').value; if (pw >= 30 && pw <= 300) plan.weight = pw;
   const r = E.proposeWeek(st, plan.wn, avail); plan.props = r;
   if (!r.options.length) { $('#props').innerHTML = '<div class="card banner">אין ימים מתאימים. נסה לסמן עוד ימים (ריצות לא יכולות להיות בשישי, ולא בשני ימים ברצף).</div>'; return; }
   const names = { long: 'ריצה ארוכה', easy1: 'ריצה קלה', easy2: 'ריצה קלה', strA: 'כוח A', strB: 'כוח B' };
@@ -199,8 +206,6 @@ function propose() {
 }
 function applyPlan(i) {
   const o = plan.props.options[i]; E.applyWeek(st, plan.wn, o, plan.props.dropped);
-  const pw = $('#pw') && +$('#pw').value; plan.weight = pw >= 30 && pw <= 300 ? pw : null;
-  if (plan.weight) { const t = todayIso(); st.weights = st.weights.filter(w => w.date !== t); st.weights.push({ date: t, kg: plan.weight }); plan.weight = null; }
   dirty(); closeSheet(); tab = 'week'; render(); toast('התוכנית נשמרה. עדכן את היומן מ"עוד".');
 }
 
@@ -235,7 +240,7 @@ function tick() {
   const s = st.sessions.find(x => x.date === t && x.status === 'planned' && x.kind !== 'race' || x.date === t && x.kind === 'race' && x.status === 'planned');
   if (!s) return;
   const d = E.describe(s);
-  if (now >= st.settings.reminder && localStorage.getItem('run_notified') !== t + s.id) { localStorage.setItem('run_notified', t + s.id); notify('🏃 ' + d.title, d.lines.join(' · '), s.id); }
+  if (now >= st.settings.reminder && localStorage.getItem('run_notified') !== t + s.id) { localStorage.setItem('run_notified', t + s.id); notify('🏃 ' + d.title + (E.weighDue(st, t) && E.weighDue(st, t).today ? ' + ⚖️ שקילה' : ''), (E.weighDue(st, t) && E.weighDue(st, t).today ? 'קודם לשקול (מספר אחד אחרי הנקודה). ' : '') + d.lines.join(' · '), s.id); }
   if (s.postponed && s.postponedAt && Date.now() - s.postponedAt >= 7200000 && !s.reNotified) { s.reNotified = true; save(); notify('⏰ עדיין מחכה: ' + d.title, 'עוד לא עדכנת. מספיק היום?', s.id); }
 }
 function handleAct(act, sid) {
@@ -266,8 +271,9 @@ document.addEventListener('click', e => {
   else if (a === 'ics') downloadICS();
   else if (a === 'close') closeSheet();
   else if (a === 'detail') { e.preventDefault(); const s = st.sessions.find(x => x.id === sid), d = E.describe(s); sheet('<h2>' + esc(d.title) + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + '</div><ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul><div class="tip">' + esc(d.tip) + '</div><div class="row">' + (s.status === 'planned' ? '<button class="b coral" data-act="done" data-sid="' + sid + '">✅ בוצע</button><button class="b alt" data-act="unsure" data-sid="' + sid + '">🤔 לא בטוח</button>' : '') + '<button class="b alt" data-act="close">סגירה</button></div>'); }
-  else if (a === 'addweight') { const v = +$('#wkg').value; if (v < 30 || v > 300) return toast('משקל לא סביר'); const t = todayIso(); st.weights = st.weights.filter(w => w.date !== t); st.weights.push({ date: t, kg: v }); save(); render(); toast('נשמר'); }
-  else if (a === 'savesettings') { st.settings.reminder = $('#rem').value || '17:00'; st.settings.weighTime = $('#wt').value || '08:00'; st.settings.heightCm = +$('#ht').value || 182; st.settings.targetKg = +$('#tg').value || null; dirty(); toast('נשמר. לחץ על הורדת קובץ יומן כדי לעדכן את השעה.'); }
+  else if (a === 'addweight') { if (saveWeight($('#wkg').value)) { render(); } }
+  else if (a === 'todayweight') { if (saveWeight($('#tw').value)) { render(); } }
+  else if (a === 'savesettings') { st.settings.reminder = $('#rem').value || '17:00'; st.settings.weighTime = $('#wt').value || '08:00'; st.settings.weighDay = +$('#wd').value; st.settings.heightCm = +$('#ht').value || 182; st.settings.targetKg = +$('#tg').value || null; dirty(); toast('נשמר. לחץ על הורדת קובץ יומן כדי לעדכן את השעה.'); }
   else if (a === 'notif') { if (!('Notification' in window)) return toast('הדפדפן לא תומך'); Notification.requestPermission().then(p => { st.settings.notify = p === 'granted'; save(); render(); }); }
   else if (a === 'export') { const b = new Blob([JSON.stringify(st)], { type: 'application/json' }), l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = 'running-backup-' + todayIso() + '.json'; document.body.appendChild(l); l.click(); l.remove(); }
   else if (a === 'reset') { if (confirm('למחוק את כל הנתונים? אי אפשר לשחזר.')) { st = E.newState(); save(); render(); } }

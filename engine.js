@@ -96,7 +96,7 @@ function describe(s) {
 function newState() {
   return {
     v: 1,
-    settings: { reminder: '17:00', weighTime: '08:00', heightCm: CFG.heightCm, targetKg: null, notify: false },
+    settings: { reminder: '17:00', weighTime: '08:00', weighDay: 2, heightCm: CFG.heightCm, targetKg: null, notify: false },
     level: 1, sessions: [{ id: 'race', week: 17, kind: 'race', date: CFG.race, level: 16, status: 'planned', seq: 0 }],
     activities: [], weights: [{ date: CFG.startWeightDate, kg: CFG.startWeight }], reviews: [], painLog: [], plannedWeeks: []
   };
@@ -300,6 +300,17 @@ function replaceWithActivity(st, sid, act) {
 }
 
 /* ---------- משקל ---------- */
+function weighDay(st) { return st.settings.weighDay == null ? 2 : +st.settings.weighDay; }
+function round1(v) { return Math.round(v * 10) / 10; }
+// האם צריך שקילה היום: אין שקילה בשבוע הנוכחי, ויום השקילה של השבוע הגיע
+function weighDue(st, today) {
+  const wn = weekNo(today), ds = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(addDays(CFG.start, (wn - 1) * 7), i));
+  const wdate = ds.find(d => dow(d) === weighDay(st));
+  if (wn < 1 || today < wdate) return null;
+  const ws = ds[0], we = ds[6];
+  if (st.weights.some(w => w.date >= ws && w.date <= we && w.date !== CFG.startWeightDate)) return null;
+  return { date: wdate, today: today === wdate };
+}
 function bmi(kg, cm) { return kg / Math.pow(cm / 100, 2); }
 function weightList(st) { return st.weights.slice().sort((a, b) => a.date < b.date ? -1 : 1); }
 function weightSummary(st) {
@@ -346,14 +357,19 @@ function buildICS(st, today) {
     else L.push('BEGIN:VALARM', 'TRIGGER:PT0M', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEscape(title), 'END:VALARM');
     L.push('END:VEVENT');
   }
+  const wd = weighDay(st), WTXT = '⚖️ שקילה לפני האימון: בבוקר, אחרי שירותים ולפני אכילה. מספר אחד אחרי הנקודה.';
+  const live = {}; st.sessions.forEach(s => { if (s.status === 'planned') live[s.date] = s; });
   st.sessions.forEach(s => {
     if (s.date < addDays(today, -7) || s.status === 'done') return;
-    const d = describe(s), cancelled = s.status === 'skipped';
-    ev(s.id, s.seq || 0, s.date, st.settings.reminder, '🏃 ' + d.title + ' (' + d.minutes + ' דק׳)', d.lines.join('\n') + '\n' + d.tip, cancelled);
+    const d = describe(s), cancelled = s.status === 'skipped', w = !cancelled && dow(s.date) === wd && s.kind !== 'race';
+    ev(s.id, s.seq || 0, s.date, st.settings.reminder, (w ? '⚖️+🏃 ' : '🏃 ') + d.title + ' (' + d.minutes + ' דק׳)' + (w ? ' + שקילה' : ''), (w ? WTXT + '\n' : '') + d.lines.join('\n') + '\n' + d.tip, cancelled);
   });
+  for (let d = today; d < CFG.race; d = addDays(d, 1)) {   // יום שקילה בלי אימון באותו יום: תזכורת נפרדת
+    if (dow(d) === wd && !live[d] && st.plannedWeeks.indexOf(weekNo(d)) >= 0) ev('weigh-' + d, 0, d, st.settings.reminder, '⚖️ שקילה שבועית', WTXT, false);
+  }
   for (let n = 1; n <= CFG.lastWeek + 1; n++) {
     const d = weekStartOf(n); if (d < today) continue;
-    ev('plan-' + d, 0, d, st.settings.weighTime, '⚖️ שקילה ותכנון השבוע', 'לשקול את עצמך, לפתוח את האפליקציה ולתכנן את השבוע.', false);
+    ev('plan-' + d, 0, d, st.settings.weighTime, '📅 תכנון השבוע', 'לפתוח את האפליקציה, לסכם את השבוע שעבר ולתכנן את הבא.', false);
   }
   L.push('END:VCALENDAR');
   return L.join('\r\n');
@@ -361,5 +377,5 @@ function buildICS(st, today) {
 
 root.Engine = { CFG, DAYNAMES, LEVELS, KIND_LABEL, pd, iso, addDays, dow, diff, weekStart, weekNo, weekStartOf, weekDates, dayName, fmt, isRun, isStr,
   describe, workoutFor, newState, proposeWeek, applyWeek, weekStats, reviewWeek, closeWeek, behindBy, markDone, missedSessions, suggest, applyAction,
-  activityImpact, replaceWithActivity, bmi, bmiLabel, weightList, weightSummary, weightMessage, streak, totals, cheer, buildICS, blocked, runCountLeft };
+  activityImpact, replaceWithActivity, bmi, bmiLabel, weighDay, weighDue, round1, weightList, weightSummary, weightMessage, streak, totals, cheer, buildICS, blocked, runCountLeft };
 })(typeof window !== 'undefined' ? window : globalThis);
