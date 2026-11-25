@@ -1,0 +1,16 @@
+{
+  "name": "running-plan",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Running plan to a 5K race",
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/local-notifications": "^7.0.0",
+    "@capacitor/share": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5"
+  }
+}

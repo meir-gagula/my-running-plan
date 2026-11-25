@@ -3,6 +3,7 @@
 'use strict';
 const E = window.Engine, KEY = 'run_state_v1';
 let st = load(), tab = 'today', opts = [];
+const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 
 function load() {
   try {
@@ -16,7 +17,7 @@ function load() {
   } catch (e) {}
   return E.newState();
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { toast('השמירה נכשלה: האחסון מלא או חסום'); } }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { toast('השמירה נכשלה: האחסון מלא או חסום'); } if (NATIVE) queueSchedule(); }
 function todayIso() { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); }
 function nowHM() { const n = new Date(); return String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0'); }
 const $ = s => document.querySelector(s);
@@ -72,7 +73,7 @@ function vToday() {
     const early = t < E.CFG.start;
     h += '<div class="card banner"><h2>' + (early ? 'מתחילים ביום שישי ' + E.fmt(E.CFG.start) : 'שבוע חדש: ' + wn + ' מתוך 16') + '</h2><p>' + (early ? 'אפשר כבר עכשיו לתכנן את השבוע הראשון.' : 'עוד לא תכננו את השבוע. נסכם את הקודם ונסדר את הימים.') + '</p><div class="row"><button class="b coral" data-act="plan" data-wn="' + wn + '">לתכנון השבוע</button></div></div>';
   }
-  if (st.icsDirty) h += '<div class="card"><h3>היומן לא מעודכן</h3><div class="mut">התוכנית השתנתה. כדי שהתזכורת תקפוץ ביומן בשעה הנכונה, הורד קובץ יומן ופתח אותו.</div><div class="row"><button class="b alt" data-act="ics">עדכון היומן</button></div></div>';
+  if (!NATIVE && st.icsDirty) h += '<div class="card"><h3>היומן לא מעודכן</h3><div class="mut">התוכנית השתנתה. כדי שהתזכורת תקפוץ ביומן בשעה הנכונה, הורד קובץ יומן ופתח אותו.</div><div class="row"><button class="b alt" data-act="ics">עדכון היומן</button></div></div>';
   const wd = E.weighDue(st, t);
   if (wd) h += '<div class="card banner"><h2>⚖️ ' + (wd.today ? 'יום שקילה' : 'עוד לא נשקלת השבוע') + '</h2><div class="mut">לפני האימון, בבוקר, אחרי שירותים ולפני אכילה. מספר אחד אחרי הנקודה, למשל 108.4</div><input id="tw" type="number" inputmode="decimal" step="0.1" min="30" max="300" placeholder="' + E.weightList(st).slice(-1)[0].kg.toFixed(1) + '" style="margin-top:8px"><div class="row"><button class="b coral" data-act="todayweight">שמירת משקל</button></div></div>';
   if (t < E.CFG.start && !st.sessions.some(x => x.week === 0)) h += '<div class="card banner"><h2>רוצה להתחיל כבר היום?</h2><p>ריצה קלה ראשונה, כ-31 דקות: חימום, דקה ריצה ושתי דקות הליכה (7 פעמים), וקירור. אחרי זה נחים עד שישי, ושבוע 1 מתחיל כרגיל.</p><div class="row"><button class="b coral" data-act="startnow">🏃 מתחילים היום</button></div></div>';
@@ -115,7 +116,7 @@ function vWeek() {
     h += '</div></div>';
   });
   h += '<div class="row">' + (wn === cw ? '<button class="b coral" data-act="plan" data-wn="' + wn + '">' + (r.kind === 'real' ? 'תכנון מחדש של השבוע' : 'תכנון השבוע') + '</button>' : '') + '<button class="b alt" data-act="allweeks">כל השבועות</button>' + (wn !== cw ? '<button class="b alt" data-act="weekgo" data-wn="' + cw + '">לשבוע הנוכחי</button>' : '') + '</div></div>';
-  h += '<div class="card"><h3>רשמת משחק או פעילות אחרת?</h3><div class="mut">טניס, כדורסל וכדומה. אפשר שזה יחליף ריצה קלה.</div><div class="row"><button class="b alt" data-act="activity">רישום פעילות</button><button class="b alt" data-act="ics">עדכון יומן (לא חובה)</button></div></div>';
+  h += '<div class="card"><h3>רשמת משחק או פעילות אחרת?</h3><div class="mut">טניס, כדורסל וכדומה. אפשר שזה יחליף ריצה קלה.</div><div class="row"><button class="b alt" data-act="activity">רישום פעילות</button>' + (NATIVE ? '' : '<button class="b alt" data-act="ics">עדכון יומן (לא חובה)</button>') + '</div></div>';
   $('#main').innerHTML = h;
 }
 function allWeeksSheet() {
@@ -169,15 +170,13 @@ function vWeight() {
 /* ---------- עוד ---------- */
 function vMore() {
   $('#title').textContent = 'עוד'; const g = st.settings;
-  const permOk = 'Notification' in window && Notification.permission === 'granted';
   $('#main').innerHTML =
     '<div class="card"><h3>תזכורות</h3><label for="rem">שעת תזכורת יומית</label><input id="rem" type="time" value="' + g.reminder + '"><label for="wd">יום שקילה שבועי (התזכורת באה יחד עם האימון)</label><select id="wd">' + [0,1,2,3,4,5,6].map(i => '<option value="' + i + '"' + (E.weighDay(st) === i ? ' selected' : '') + '>' + E.DAYNAMES[i] + '</option>').join('') + '</select><label for="wt">שעת תזכורת לתכנון בשישי</label><input id="wt" type="time" value="' + g.weighTime + '">' +
-    '<div class="row"><button class="b" data-act="ics">⬇️ הורדת קובץ יומן (התזכורת האמינה)</button></div>' +
-    '<div class="tip">פתח את הקובץ שירד, ובחר לייבא ליומן Google. התזכורת תקפוץ בשעה שקבעת גם כשהאפליקציה סגורה. אחרי כל שינוי בתוכנית, לחץ שוב כדי לעדכן. אם אחרי העדכון תראה אימון כפול ביומן, מחק את הישן ידנית.</div>' +
-    '<div class="row"><button class="b alt" data-act="notif">' + (permOk ? '✅ התראות באפליקציה פעילות' : '🔔 הפעלת התראות באפליקציה') + '</button></div><div class="mut">התראה עם כפתורים (בוצע / אחר כך / לא בטוח) מופיעה רק כשהאפליקציה נפתחה בטלפון אחרי שעת התזכורת. היא לא תחליף ליומן.</div></div>' +
+    remindersExtra() + '</div>' +
     '<div class="card"><h3>פרטים</h3><label for="ht">גובה בס"מ</label><input id="ht" type="number" inputmode="numeric" value="' + g.heightCm + '"><label for="tg">משקל יעד בק"ג (אפשר להשאיר ריק)</label><input id="tg" type="number" inputmode="decimal" step="0.5" value="' + (g.targetKg || '') + '"><div class="row"><button class="b coral" data-act="savesettings">שמירה</button></div></div>' +
-    '<div class="card"><h3>גיבוי</h3><div class="mut">הכול נשמר רק בטלפון הזה. מומלץ לגבות מדי פעם.</div><div class="row"><button class="b alt" data-act="export">גיבוי לקובץ</button><label class="b alt" style="margin:0">שחזור מקובץ<input type="file" id="imp" accept=".json" hidden></label></div></div>' +
+    backupCard() +
     '<div class="card"><h3>בטיחות</h3><div class="mut">התוכנית כללית ואינה תחליף לייעוץ רפואי. כאב בחזה, סחרור, קוצר נשימה חריג או כאב חד במפרק הם סיבה לעצור ולפנות לרופא. בגשם ובחושך: נעליים עם אחיזה ובגדים בולטים.</div><div class="row"><button class="b alt sm" data-act="reset">איפוס כל הנתונים</button></div></div>';
+  if (NATIVE && LN()) LN().getPending().then(p => { const e = $('#pendinfo'); if (e) e.textContent = 'תזכורות מתוזמנות כרגע: ' + p.notifications.length; }).catch(() => {});
   const imp = $('#imp'); if (imp) imp.onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const o = JSON.parse(r.result); if (!o.sessions || !o.settings) throw 0; st = Object.assign(E.newState(), o); save(); toast('שוחזר'); render(); } catch (x) { toast('הקובץ לא תקין'); } }; r.readAsText(f); };
 }
 
@@ -310,6 +309,11 @@ document.addEventListener('click', e => {
   else if (a === 'delw') { if (st.weights.length > 1) { st.weights = st.weights.filter(x => x.date !== el.dataset.d); save(); closeSheet(); render(); toast('נמחק'); } }
   else if (a === 'weekgo') { viewWeek = +el.dataset.wn; closeSheet(); tab = 'week'; render(); }
   else if (a === 'allweeks') allWeeksSheet();
+  else if (a === 'notifsetup') nativeSetup(true).then(ok => { if (ok) { toast('התזכורות פעילות'); render(); } });
+  else if (a === 'notiftest') { const ln = LN(); if (!ln) return toast('רכיב ההתראות לא נמצא'); ln.schedule({ notifications: [{ id: 999, title: '🏃 בדיקה: אימון להיום', body: 'ככה תיראה התזכורת. נסה את הכפתורים.', schedule: { at: new Date(Date.now() + 10000), allowWhileIdle: true }, channelId: 'training', actionTypeId: 'TRAIN', extra: { sid: '' } }] }).then(() => toast('ההתראה תגיע בעוד 10 שניות. אפשר לסגור את האפליקציה.')).catch(e => toast('שגיאה: ' + (e.message || e))); }
+  else if (a === 'exportshare') { const sh = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Share; if (!sh) return toast('שיתוף לא זמין'); sh.share({ title: 'גיבוי אימונים', text: JSON.stringify(st), dialogTitle: 'גיבוי' }).catch(() => {}); }
+  else if (a === 'importpaste') sheet('<h2>שחזור מגיבוי</h2><div class="mut">הדבק כאן את טקסט הגיבוי.</div><textarea id="pastebox" rows="6" style="margin-top:8px"></textarea><div class="row"><button class="b coral" data-act="doimport">שחזור</button><button class="b alt" data-act="close">ביטול</button></div>');
+  else if (a === 'doimport') { try { const o = JSON.parse($('#pastebox').value); if (!o.sessions || !o.settings) throw 0; st = Object.assign(E.newState(), o); save(); closeSheet(); render(); toast('שוחזר'); } catch (x) { toast('הטקסט לא תקין'); } }
   else if (a === 'ics') downloadICS();
   else if (a === 'close') closeSheet();
   else if (a === 'detail') { e.preventDefault(); const s = st.sessions.find(x => x.id === sid), d = E.describe(s); sheet('<h2>' + esc(d.title) + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + '</div><ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul><div class="tip">' + esc(d.tip) + '</div><div class="row">' + (s.status === 'planned' ? '<button class="b coral" data-act="done" data-sid="' + sid + '">✅ בוצע</button><button class="b alt" data-act="unsure" data-sid="' + sid + '">🤔 לא בטוח</button>' : '') + '<button class="b alt" data-act="close">סגירה</button></div>'); }
@@ -322,15 +326,72 @@ document.addEventListener('click', e => {
 });
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
 
+/* ---------- אפליקציית אנדרואיד: תזכורות מקומיות (בלי שרת ובלי יומן) ---------- */
+const KINDS = ['long', 'easy1', 'easy2', 'strA', 'strB', 'race'];
+function LN() { return window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.LocalNotifications; }
+let schT;
+function queueSchedule() { clearTimeout(schT); schT = setTimeout(scheduleNative, 600); }
+function weighedThatWeek(iso) { const ws = E.weekStart(iso), we = E.addDays(ws, 6); return st.weights.some(w => w.date >= ws && w.date <= we && !w.start && w.date !== E.CFG.startWeightDate); }
+async function nativeSetup(interactive) {
+  const ln = LN(); if (!ln) { if (interactive) toast('רכיב ההתראות לא נמצא'); return false; }
+  try {
+    let p = await ln.checkPermissions();
+    if (p.display !== 'granted') p = await ln.requestPermissions();
+    if (p.display !== 'granted') { if (interactive) toast('ההתראות חסומות. אפשר להפעיל בהגדרות הטלפון, באפליקציות.'); return false; }
+    await ln.createChannel({ id: 'training', name: 'תזכורות אימון', description: 'תזכורת יומית לאימון', importance: 4, visibility: 1, vibration: true });
+    await ln.registerActionTypes({ types: [{ id: 'TRAIN', actions: [{ id: 'done', title: '✅ בוצע' }, { id: 'later', title: '⏰ היום, אחר כך' }, { id: 'unsure', title: '🤔 לא בטוח' }] }] });
+    try { const ex = await ln.checkExactNotificationSetting(); if (ex.exact_alarm !== 'granted' && interactive) { toast('כדי שהתזכורת תקפוץ בדיוק בשעה, אשר "התראות ותזכורות מדויקות".'); await ln.changeExactNotificationSetting(); } } catch (e) {}
+    st.settings.notify = true; save();
+    await scheduleNative(); return true;
+  } catch (e) { if (interactive) toast('שגיאה בהגדרת התראות: ' + (e.message || e)); return false; }
+}
+async function scheduleNative() {
+  const ln = LN(); if (!ln || !st.settings.notify) return;
+  try {
+    const pend = await ln.getPending(); if (pend.notifications.length) await ln.cancel({ notifications: pend.notifications.map(n => ({ id: n.id })) });
+    const now = new Date(), today = todayIso(), end = E.addDays(today, 21), list = [], wd = E.weighDay(st), live = {};
+    const at = (iso, hm) => { const a = iso.split('-').map(Number), b = hm.split(':').map(Number); return new Date(a[0], a[1] - 1, a[2], b[0], b[1], 0); };
+    const add = (id, when, title, body, sid) => { if (when > now) { const n = { id, title, body, schedule: { at: when, allowWhileIdle: true }, channelId: 'training', extra: { sid: sid || '' } }; if (sid) n.actionTypeId = 'TRAIN'; list.push(n); } };
+    st.sessions.forEach(s => { if (s.status === 'planned') live[s.date] = s; });
+    st.sessions.forEach(s => {
+      if (s.status !== 'planned' || s.date < today || s.date > end) return;
+      const d = E.describe(s), w = s.kind !== 'race' && E.dow(s.date) === wd && !weighedThatWeek(s.date), k = KINDS.indexOf(s.kind);
+      add(100000 + s.week * 100 + k * 10, at(s.date, st.settings.reminder), (w ? '⚖️+🏃 ' : '🏃 ') + d.title, (w ? 'קודם לשקול (מספר אחד אחרי הנקודה). ' : '') + d.lines.join(' · '), s.id);
+      if (s.postponed && s.postponedAt) add(900000 + s.week * 100 + k, new Date(s.postponedAt + 7200000), '⏰ עדיין מחכה: ' + d.title, 'עוד לא עדכנת. מספיק היום?', s.id);
+    });
+    for (let d = today; d <= end; d = E.addDays(d, 1)) {
+      const wn = E.weekNo(d);
+      if (E.dow(d) === wd && !live[d] && st.plannedWeeks.indexOf(wn) >= 0 && !weighedThatWeek(d)) add(200000 + wn, at(d, st.settings.reminder), '⚖️ שקילה שבועית', 'מספר אחד אחרי הנקודה, למשל 108.4', '');
+      if (E.dow(d) === 5 && d < E.CFG.race && wn >= 1) add(300000 + wn, at(d, st.settings.weighTime), '📅 תכנון השבוע', 'פתח את האפליקציה, סכם את השבוע שעבר ותכנן את הבא.', '');
+    }
+    if (list.length) await ln.schedule({ notifications: list });
+  } catch (e) { console.warn(e); }
+}
+function nativeInit() {
+  const ln = LN(); if (!ln) return;
+  ln.addListener('localNotificationActionPerformed', ev => { const sid = ev.notification && ev.notification.extra && ev.notification.extra.sid, act = ev.actionId; if (act === 'tap' || !act) { tab = 'today'; render(); } else handleAct(act, sid); });
+  nativeSetup(false);
+}
+function remindersExtra() {
+  if (NATIVE) return '<div class="row"><button class="b" data-act="notifsetup">🔔 הפעלה ובדיקת הרשאות</button><button class="b alt" data-act="notiftest">התראת בדיקה בעוד 10 שניות</button></div><div class="mut" id="pendinfo"></div><div class="tip">התזכורת קופצת בשעה שקבעת גם כשהאפליקציה סגורה, עם כפתורים: בוצע, אחר כך, לא בטוח. היא מתעדכנת לבד אחרי כל שינוי בתוכנית. אם היא לא קופצת, בדוק בהגדרות הטלפון שההתראות מאושרות ושחיסכון בסוללה לא חוסם את האפליקציה.</div>';
+  const permOk = 'Notification' in window && Notification.permission === 'granted';
+  return '<div class="row"><button class="b" data-act="ics">⬇️ הורדת קובץ יומן</button></div><div class="tip">באתר (לא באפליקציה) התזכורת האמינה היא קובץ יומן. התקן את אפליקציית האנדרואיד כדי לקבל תזכורות בלי יומן.</div><div class="row"><button class="b alt" data-act="notif">' + (permOk ? '✅ התראות באתר פעילות' : '🔔 הפעלת התראות באתר') + '</button></div>';
+}
+function backupCard() {
+  return '<div class="card"><h3>גיבוי</h3><div class="mut">הכול נשמר רק בטלפון הזה. מומלץ לגבות מדי פעם.</div>' + (NATIVE
+    ? '<div class="row"><button class="b alt" data-act="exportshare">גיבוי (שליחה לוואטסאפ / מייל / שמירה)</button><button class="b alt" data-act="importpaste">שחזור מהדבקה</button></div></div>'
+    : '<div class="row"><button class="b alt" data-act="export">גיבוי לקובץ</button><label class="b alt" style="margin:0">שחזור מקובץ<input type="file" id="imp" accept=".json" hidden></label></div></div>');
+}
+
 /* ---------- אתחול ---------- */
 maintain(); render();
-if ('serviceWorker' in navigator) {
+if (!NATIVE && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
   navigator.serviceWorker.addEventListener('message', e => handleAct(e.data.act, e.data.sid));
 }
 const q = new URLSearchParams(location.search);
 if (q.get('act')) { handleAct(q.get('act'), q.get('sid')); history.replaceState(null, '', location.pathname); }
-setInterval(tick, 30000); tick();
+if (!NATIVE) { setInterval(tick, 30000); tick(); } else nativeInit();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { maintain(); if ($('#sheet').hidden) render(); tick(); } });
 window.__app = { get st() { return st; }, render };
 })();
