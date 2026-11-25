@@ -4,7 +4,18 @@
 const E = window.Engine, KEY = 'run_state_v1';
 let st = load(), tab = 'today', opts = [];
 
-function load() { try { const r = localStorage.getItem(KEY); if (r) return Object.assign(E.newState(), JSON.parse(r)); } catch (e) {} return E.newState(); }
+function load() {
+  try {
+    const r = localStorage.getItem(KEY);
+    if (r) {
+      const o = Object.assign(E.newState(), JSON.parse(r));
+      if (!o.weights.some(w => w.start)) o.weights.push({ date: '2026-11-18', kg: 113.6, start: true });   // משקל התחלה לפני הירידה
+      o.weights.forEach(w => { if (w.date === E.CFG.startWeightDate && w.kg === 109) w.kg = 111; });       // תיקון: 109 היה טעות
+      return o;
+    }
+  } catch (e) {}
+  return E.newState();
+}
 function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { toast('השמירה נכשלה: האחסון מלא או חסום'); } }
 function todayIso() { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); }
 function nowHM() { const n = new Date(); return String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0'); }
@@ -127,7 +138,7 @@ function vWeight() {
     if (g.targetKg) s += '<line x1="0" x2="' + W + '" y1="' + py(g.targetKg) + '" y2="' + py(g.targetKg) + '" stroke="#2f7d57" stroke-dasharray="4 4"/>';
     h += '<div class="card"><h3>מגמה</h3>' + s + '</svg></div>';
   }
-  h += '<div class="card"><h3>היסטוריה</h3>' + w.slice().reverse().map(p => '<div class="wk"><div class="d">' + E.fmt(p.date) + '</div><div class="t">' + p.kg.toFixed(1) + ' ק"ג · BMI ' + E.bmi(p.kg, g.heightCm).toFixed(1) + '</div></div>').join('') + '</div>';
+  h += '<div class="card"><h3>היסטוריה</h3>' + w.slice().reverse().map(p => '<div class="wk" data-act="editw" data-d="' + p.date + '" style="cursor:pointer"><div class="d">' + (p.start ? 'התחלה' : E.fmt(p.date)) + '</div><div class="t">' + p.kg.toFixed(1) + ' ק"ג · BMI ' + E.bmi(p.kg, g.heightCm).toFixed(1) + ' <span class="mut">· עריכה</span></div></div>').join('') + '</div>';
   $('#main').innerHTML = h;
 }
 
@@ -270,6 +281,9 @@ document.addEventListener('click', e => {
   else if (a === 'saveactivity') saveActivity();
   else if (a === 'useact') { E.replaceWithActivity(st, sid, window._act); dirty(); closeSheet(); render(); toast('סומן כבוצע'); }
   else if (a === 'startnow') { const t = todayIso(); st.sessions.push({ id: '0-easy1', week: 0, kind: 'easy1', date: t, level: 1, status: 'planned', seq: 0, taper: false }); dirty(); render(); toast('יאללה! בהצלחה בריצה הראשונה.'); }
+  else if (a === 'editw') { const d = el.dataset.d, w = st.weights.find(x => x.date === d); sheet('<h2>עריכת שקילה מ-' + E.fmt(d) + '</h2><label for="ew">משקל בק"ג (נקודה ומספר אחד אחריה)</label><input id="ew" type="number" inputmode="decimal" step="0.1" value="' + w.kg.toFixed(1) + '"><div class="row"><button class="b coral" data-act="savew" data-d="' + d + '">שמירה</button>' + (st.weights.length > 1 ? '<button class="b alt" data-act="delw" data-d="' + d + '">מחיקה</button>' : '') + '<button class="b alt" data-act="close">ביטול</button></div>'); }
+  else if (a === 'savew') { const v = E.round1(+$('#ew').value); if (!(v >= 30 && v <= 300)) return toast('משקל לא סביר'); st.weights.find(x => x.date === el.dataset.d).kg = v; save(); closeSheet(); render(); toast('עודכן: ' + v.toFixed(1)); }
+  else if (a === 'delw') { if (st.weights.length > 1) { st.weights = st.weights.filter(x => x.date !== el.dataset.d); save(); closeSheet(); render(); toast('נמחק'); } }
   else if (a === 'ics') downloadICS();
   else if (a === 'close') closeSheet();
   else if (a === 'detail') { e.preventDefault(); const s = st.sessions.find(x => x.id === sid), d = E.describe(s); sheet('<h2>' + esc(d.title) + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + '</div><ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul><div class="tip">' + esc(d.tip) + '</div><div class="row">' + (s.status === 'planned' ? '<button class="b coral" data-act="done" data-sid="' + sid + '">✅ בוצע</button><button class="b alt" data-act="unsure" data-sid="' + sid + '">🤔 לא בטוח</button>' : '') + '<button class="b alt" data-act="close">סגירה</button></div>'); }

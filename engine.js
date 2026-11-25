@@ -2,7 +2,7 @@
 (function (root) {
 'use strict';
 const DAY = 864e5;
-const CFG = { start: '2026-11-27', race: '2027-03-19', lastWeek: 16, startWeight: 109, startWeightDate: '2026-11-25', heightCm: 182 };
+const CFG = { start: '2026-11-27', race: '2027-03-19', lastWeek: 16, startWeight: 111, startWeightDate: '2026-11-25', heightCm: 182 };
 const DAYNAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
 /* ---------- תאריכים (UTC, כדי שלא יהיו קפיצות שעון קיץ) ---------- */
@@ -98,7 +98,7 @@ function newState() {
     v: 1,
     settings: { reminder: '17:00', weighTime: '08:00', weighDay: 2, heightCm: CFG.heightCm, targetKg: null, notify: false },
     level: 1, sessions: [{ id: 'race', week: 17, kind: 'race', date: CFG.race, level: 16, status: 'planned', seq: 0 }],
-    activities: [], weights: [{ date: CFG.startWeightDate, kg: CFG.startWeight }], reviews: [], painLog: [], plannedWeeks: []
+    activities: [], weights: [{ date: '2026-11-18', kg: 113.6, start: true }, { date: CFG.startWeightDate, kg: CFG.startWeight }], reviews: [], painLog: [], plannedWeeks: []
   };
 }
 
