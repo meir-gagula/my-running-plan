@@ -86,7 +86,10 @@ function vToday() {
   if (!NATIVE && st.icsDirty) h += '<div class="card"><h3>היומן לא מעודכן</h3><div class="mut">התוכנית השתנתה. כדי שהתזכורת תקפוץ ביומן בשעה הנכונה, הורד קובץ יומן ופתח אותו.</div><div class="row"><button class="b alt" data-act="ics">עדכון היומן</button></div></div>';
   const wd = E.weighDue(st, t);
   if (wd) h += '<div class="card banner"><h2>⚖️ ' + (wd.today ? 'יום שקילה' : 'עוד לא נשקלת השבוע') + '</h2><div class="mut">לפני האימון, בבוקר, אחרי שירותים ולפני אכילה. מספר אחד אחרי הנקודה, למשל 108.4</div><input id="tw" type="number" inputmode="decimal" step="0.1" min="30" max="300" placeholder="' + E.weightList(st).slice(-1)[0].kg.toFixed(1) + '" style="margin-top:8px"><div class="row"><button class="b coral" data-act="todayweight">שמירת משקל</button></div></div>';
-  if (t < E.CFG.start && !st.sessions.some(x => x.week === 0)) h += '<div class="card banner"><h2>רוצה להתחיל כבר היום?</h2><p>ריצה קלה ראשונה, כ-31 דקות: חימום, דקה ריצה ושתי דקות הליכה (7 פעמים), וקירור. אחרי זה נחים עד שישי, ושבוע 1 מתחיל כרגיל.</p><div class="row"><button class="b coral" data-act="startnow">🏃 מתחילים היום</button></div></div>';
+  if (t < E.CFG.start && !st.sessions.some(x => x.week === 0)) {
+    const smp = { kind: 'easy1', level: 1 }, dd = E.describe(smp), ww = E.workoutFor(smp);
+    h += '<div class="card banner"><h2>רוצה להתחיל כבר היום?</h2><p>ריצה קלה ראשונה, כ-' + dd.minutes + ' דקות: חימום, ' + (ww.cont ? ww.cont + ' דקות ריצה' : 'דקה ריצה ושתי דקות הליכה (' + ww.reps + ' פעמים)') + ', וקירור. אחרי זה נחים עד שישי, ושבוע 1 מתחיל כרגיל.</p><div class="row"><button class="b coral" data-act="startnow">🏃 מתחילים היום</button><button class="b alt" data-act="pastopening">כבר ביצעתי ב-' + E.fmt(E.CFG.firstDay) + '</button></div></div>';
+  }
   const today = st.sessions.filter(s => s.date === t);
   if (t === E.CFG.race) h += sessionCard(today.find(s => s.kind === 'race'), true);
   else if (today.length) h += today.map(s => sessionCard(s, true)).join('');
@@ -343,6 +346,7 @@ document.addEventListener('click', e => {
   else if (a === 'importpaste') sheet('<h2>שחזור מגיבוי</h2><div class="mut">הדבק כאן את טקסט הגיבוי.</div><textarea id="pastebox" rows="6" style="margin-top:8px"></textarea><div class="row"><button class="b coral" data-act="doimport">שחזור</button><button class="b alt" data-act="close">ביטול</button></div>');
   else if (a === 'doimport') { try { const o = JSON.parse($('#pastebox').value); if (!o.sessions || !o.settings) throw 0; st = Object.assign(E.newState(), o); save(); closeSheet(); render(); toast('שוחזר'); } catch (x) { toast('הטקסט לא תקין'); } }
   else if (a === 'livestart') liveStart(sid);
+  else if (a === 'pastopening') { const id = '0-easy1'; if (!st.sessions.some(x => x.id === id)) st.sessions.push({ id, week: 0, kind: 'easy1', date: E.CFG.firstDay, level: 1, status: 'planned', seq: 0, taper: false }); save(); doneSheet(id, 28); }
   else if (a === 'ics') downloadICS();
   else if (a === 'close') closeSheet();
   else if (a === 'detail') { e.preventDefault(); const s = st.sessions.find(x => x.id === sid), d = E.describe(s); sheet('<h2>' + esc(d.title) + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + '</div><ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul>' + logSummary(s) + '<div class="tip">' + esc(d.tip) + '</div><div class="row">' + (s.status === 'planned' ? '<button class="b coral" style="flex-basis:100%" data-act="livestart" data-sid="' + sid + '">▶️ התחל אימון</button><button class="b alt" data-act="done" data-sid="' + sid + '">✅ בוצע</button><button class="b alt" data-act="unsure" data-sid="' + sid + '">🤔 לא בטוח</button>' : '') + '<button class="b alt" data-act="close">סגירה</button></div>'); }
