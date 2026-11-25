@@ -35,7 +35,7 @@ function maintain() {
   for (let w = 1; w < cw && w <= E.CFG.lastWeek; w++) {
     if (st.reviews.some(r => r.week === w)) continue;
     if (st.plannedWeeks.indexOf(w) >= 0) E.closeWeek(st, w);
-    else st.reviews.push({ week: w, from: st.level, to: st.level, why: 'השבוע לא תוכנן' });
+    else { const f = st.level; st.level = Math.max(1, st.level - 1); st.reviews.push({ week: w, from: f, to: st.level, why: 'השבוע לא תוכנן ולא בוצעו אימונים, אז חוזרים צעד אחורה' }); }
   }
   save();
 }
@@ -82,7 +82,7 @@ function vToday() {
   else if (today.length) h += today.map(s => sessionCard(s, true)).join('');
   else {
     const next = st.sessions.filter(s => s.status === 'planned' && s.date > t && s.kind !== 'race').sort((a, b) => a.date < b.date ? -1 : 1)[0];
-    h += '<div class="card"><h2>היום מנוחה</h2><p>מנוחה היא חלק מהאימון, כאן הגוף נבנה. הליכה קלה מותרת.</p>' + (next ? '<div class="mut">האימון הבא: ' + esc(E.describe(next).title) + ', יום ' + E.dayName(next.date) + ' ' + E.fmt(next.date) + '</div>' : '') + '</div>';
+    h += '<div class="card"><h2>היום מנוחה</h2><p>מנוחה היא חלק מהאימון, כאן הגוף נבנה. מותר (לא חובה) הליכה מהירה של 30 עד 40 דקות או אופניים.</p>' + (next ? '<div class="mut">האימון הבא: ' + esc(E.describe(next).title) + ', יום ' + E.dayName(next.date) + ' ' + E.fmt(next.date) + '</div>' : '') + '</div>';
   }
   const c = E.cheer(st, t); if (c) h += '<div class="card good">' + esc(c) + '</div>';
   h += '<div class="mut" style="text-align:center">שלב ' + st.level + ' מתוך 16 · התוכנית אינה תחליף לייעוץ רפואי</div>';
@@ -141,6 +141,7 @@ function vProgress() {
   h += '<div class="card"><h3>שלב ' + st.level + ' מתוך 16</h3><div class="bar"><i style="width:' + (st.level / 16 * 100) + '%"></i></div>';
   const lag = E.behindBy(st, cw), streak = E.streak(st, todayIso());
   h += '<div class="mut" style="margin-top:6px">' + (lag > 1 ? 'אתה כ-' + lag + ' שלבים מאחורי התוכנית. זה בסדר: במרוץ מותר לשלב הליכה, והמטרה היא לסיים בכיף.' : lag <= 0 && cw > 1 ? 'אתה בקצב התוכנית.' : 'אתה בקצב התוכנית.') + (streak ? ' ' + streak + ' שבועות רצופים עם 2 ריצות ויותר.' : '') + '</div></div>';
+  if (cw >= 12 && st.level < 9) h += '<div class="card banner"><h3>תכנית למרוץ: ריצה והליכה לסירוגין</h3><div class="mut">אתה נמצא בשלב ' + st.level + ', מתחת ל-9, ולכן כדאי לתכנן את המרוץ כריצה והליכה לסירוגין, למשל 8 דקות ריצה ודקה הליכה. זה עדיין נחשב סיום של 5 ק"מ, ובלי לוחצים על הגוף.</div></div>';
   const vals = [], labs = []; for (let w = 1; w <= cw; w++) { vals.push(E.weekStats(st, w).minutes); labs.push(w); }
   h += '<div class="card"><h3>דקות אימון בכל שבוע</h3>' + bars(vals, labs, Math.max.apply(null, vals.concat([30])), '#f5b700') + '</div>';
   const cv = [], cl = []; for (let w = 1; w <= cw; w++) { const s = E.weekStats(st, w); cv.push(s.runPlanned ? Math.round(s.runCredit / s.runPlanned * 100) : 0); cl.push(w); }
@@ -193,16 +194,17 @@ function doneSheet(sid, mins) {
   const s = st.sessions.find(x => x.id === sid), d = E.describe(s), run = E.isRun(s.kind);
   sheet('<h2>' + esc(d.title) + ' – איך היה?</h2><label for="f-min">כמה דקות בפועל?</label><input id="f-min" type="number" inputmode="numeric" value="' + (mins || d.minutes) + '">' +
     (run ? '<label for="f-km">מרחק בק"מ (אם ידוע, אפשר לדלג)</label><input id="f-km" type="number" inputmode="decimal" step="0.1">' : '') +
-    '<label for="f-rpe">כמה קשה זה היה? <span id="f-rpe-t">5 – ' + RPE[5] + '</span></label><input id="f-rpe" type="range" min="1" max="10" value="5"><label><input type="checkbox" id="f-pain"> היה כאב חד או כאב שמטריד</label>' +
+    '<label for="f-rpe">כמה קשה זה היה? <span id="f-rpe-t">5 – ' + RPE[5] + '</span></label><input id="f-rpe" type="range" min="1" max="10" value="5"><label for="f-sore">כאבי שרירים מהאימון הקודם: <span id="f-sore-t">0</span> מתוך 10</label><input id="f-sore" type="range" min="0" max="10" value="0"><label><input type="checkbox" id="f-pain"> היה כאב חד או כאב שמטריד</label>' +
     '<div class="row"><button class="b coral" data-act="savedone" data-sid="' + sid + '">שמירה</button><button class="b alt" data-act="close">ביטול</button></div>');
   $('#f-rpe').oninput = e => { $('#f-rpe-t').textContent = e.target.value + ' – ' + RPE[e.target.value]; };
+  $('#f-sore').oninput = e => { $('#f-sore-t').textContent = e.target.value; };
 }
 function saveDone(sid) {
   const s = st.sessions.find(x => x.id === sid), pain = $('#f-pain').checked, rpe = +$('#f-rpe').value;
-  const log = { date: s.date < todayIso() ? s.date : todayIso(), minutes: +$('#f-min').value || 0, rpe, pain };
+  const sore = +$('#f-sore').value, log = { date: s.date < todayIso() ? s.date : todayIso(), minutes: +$('#f-min').value || 0, rpe, pain, soreness: sore };
   const km = $('#f-km') && +$('#f-km').value; if (km) log.km = km;
   E.markDone(st, sid, log); dirty(); closeSheet(); render();
-  toast(pain ? 'נרשם. כאב הוא סימן לנוח: אם הוא נמשך, כדאי להיבדק.' : rpe >= 9 ? 'כל הכבוד, אבל זה היה מאמץ גבוה. בפעם הבאה לאט יותר.' : E.cheer(st, todayIso()) || 'כל הכבוד!');
+  toast(pain ? 'נרשם. כאב הוא סימן לנוח: אם הוא נמשך, כדאי להיבדק.' : sore >= 5 ? 'כאבי שרירים גבוהים. אפשר להחליף את הריצה הבאה בהליכה מהירה או באופניים.' : rpe >= 9 ? 'כל הכבוד, אבל זה היה מאמץ גבוה. בפעם הבאה לאט יותר.' : E.cheer(st, todayIso()) || 'כל הכבוד!');
 }
 
 /* ---------- לא בטוח / לא בוצע ---------- */

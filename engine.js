@@ -21,37 +21,39 @@ function fmt(s) { const p = s.split('-'); return +p[2] + '.' + +p[1]; }
 /* ---------- טבלת השלבים ---------- */
 // run/walk בדקות, reps חזרות; cont = ריצה רצופה בדקות
 const LEVELS = [null,
-  { easy: { run: 1, walk: 2, reps: 7 }, long: { run: 1, walk: 2, reps: 8 } },
-  { easy: { run: 1.5, walk: 2, reps: 6 }, long: { run: 1.5, walk: 2, reps: 7 } },
-  { easy: { run: 2, walk: 1.5, reps: 6 }, long: { run: 2, walk: 1.5, reps: 7 } },
-  { light: 1, easy: { run: 2, walk: 1.5, reps: 5 }, long: { run: 2, walk: 1.5, reps: 6 } },
-  { easy: { run: 3, walk: 1.5, reps: 5 }, long: { run: 3, walk: 1.5, reps: 6 } },
-  { easy: { run: 4, walk: 1, reps: 5 }, long: { run: 4, walk: 1, reps: 6 } },
-  { easy: { run: 5, walk: 1, reps: 4 }, long: { run: 5, walk: 1, reps: 5 } },
-  { light: 1, easy: { run: 5, walk: 1, reps: 4 }, long: { cont: 8 } },
-  { easy: { run: 8, walk: 1, reps: 3 }, long: { cont: 10 } },
-  { easy: { run: 10, walk: 1, reps: 2 }, long: { cont: 12 } },
-  { easy: { cont: 12 }, long: { cont: 15 } },
-  { light: 1, easy: { cont: 10 }, long: { cont: 15 } },
-  { easy: { cont: 15 }, long: { cont: 20 } },
-  { easy: { cont: 15 }, long: { cont: 25 } },
-  { easy: { cont: 20 }, long: { cont: 30 } },
-  { taper: 1, easy: { cont: 20 }, easy2: { cont: 10 }, long: { cont: 30 } }
+  { easy: { run: 1, walk: 2, reps: 6 }, long: { run: 1, walk: 2, reps: 7 } },
+  { easy: { run: 1.5, walk: 2, reps: 5 }, long: { run: 1.5, walk: 2, reps: 6 } },
+  { easy: { run: 2, walk: 2, reps: 5 }, long: { run: 2, walk: 2, reps: 6 } },
+  { light: 1, easy: { run: 2, walk: 2, reps: 4 }, long: { run: 2, walk: 2, reps: 4 } },
+  { easy: { run: 3, walk: 2, reps: 4 }, long: { run: 3, walk: 2, reps: 5 } },
+  { easy: { run: 4, walk: 1.5, reps: 3 }, long: { run: 4, walk: 1.5, reps: 5 } },
+  { easy: { run: 5, walk: 1, reps: 3 }, long: { run: 5, walk: 1, reps: 4 } },
+  { light: 1, easy: { run: 4, walk: 1, reps: 3 }, long: { run: 5, walk: 1, reps: 3 } },
+  { easy: { run: 5, walk: 1, reps: 3 }, long: { run: 8, walk: 1, reps: 3 } },
+  { easy: { run: 8, walk: 1, reps: 2 }, long: { run: 10, walk: 1, reps: 3 } },
+  { easy: { run: 10, walk: 1, reps: 2 }, long: { run: 15, walk: 1, reps: 2 } },
+  { light: 1, easy: { cont: 10 }, long: { cont: 18 } },
+  { easy: { cont: 15 }, long: { cont: 24 } },
+  { easy: { cont: 15 }, long: { cont: 30 } },
+  { easy: { cont: 18 }, long: { cont: 35 } },
+  { taper: 1, easy: { cont: 20 }, easy2: { cont: 10 }, long: { cont: 35 } }
 ];
 
+const PUSH = ['על הקיר', 'על שולחן או משטח גבוה', 'על כיסא או ספה', 'על מדרגות', 'על הברכיים', 'מהרצפה'];
+const pushStep = lv => lv <= 2 ? 0 : lv <= 4 ? 1 : lv <= 7 ? 2 : lv <= 10 ? 3 : lv <= 13 ? 4 : 5;
 const STR = {
-  strA: [
-    ['סקוואט', ['2×10', '3×12', '3×12 איטי (3 שניות בירידה)']],
-    ['שכיבות סמיכה', ['2×6 עד 8 בשיפוע (ידיים על שולחן)', '3×8 בשיפוע נמוך (ידיים על כיסא)', '3×8 עד 10 מהרצפה (או על הברכיים)']],
-    ['גשר ישבן', ['2×12', '3×15', '3×8 על רגל אחת, לכל צד']],
-    ['פלאנק', ['2×20 שניות', '3×30 שניות', '3×40 שניות']]
-  ],
-  strB: [
-    ['הרמות עקבים (על מדרגה)', ['2×12', '3×15', '3×10 על רגל אחת']],
-    ['עליית מדרגה', ['2×8 לכל רגל', '3×10 לכל רגל', '3×12 לכל רגל, מדרגה גבוהה']],
-    ['שכיבות סמיכה', ['2×6 בשיפוע', '3×8 בשיפוע נמוך', '3×8 מהרצפה']],
+  strA: [   // שישי: פלג גוף עליון ובטן
+    ['שכיבות סמיכה', ['2×8', '3×8', '3×10'], 'push'],
     ['כפיפות בטן', ['2×10', '3×15', '3×20']],
-    ['פלאנק', ['2×20 שניות', '3×30 שניות', '3×45 שניות']]
+    ['פלאנק', ['2×20 שניות', '3×30 שניות', '3×45 שניות']],
+    ['גשר ישבן', ['2×12', '3×15', '3×15']]
+  ],
+  strB: [   // שלישי: רגליים
+    ['סקוואט (3 שניות בירידה)', ['2×10', '3×12', '3×12, אפשר תרמיל עם בקבוקי מים']],
+    ['עליית מדרגה', ['2×8 לכל רגל', '3×10 לכל רגל', '3×12 לכל רגל, מדרגה גבוהה']],
+    ['גשר ישבן', ['2×12', '3×12 על רגל אחת, לכל צד', '3×12 על רגל אחת, לכל צד']],
+    ['הרמות עקבים (על מדרגה)', ['2×12', '3×15', '3×12 על רגל אחת']],
+    ['הטיית גוף קדימה עם גב ישר (RDL)', ['2×10', '2×8 על רגל אחת, לכל צד', '3×8 על רגל אחת, לכל צד']]
   ]
 };
 const tierOf = lv => lv <= 4 ? 0 : lv <= 10 ? 1 : 2;
@@ -85,11 +87,13 @@ function describe(s) {
     else lines.push('ריצה קלה ' + fmtMin(w.run) + ', ואז הליכה ' + fmtMin(w.walk) + '. חוזר ' + w.reps + ' פעמים');
     lines.push('קירור: 5 דקות הליכה');
     return { title: label, minutes: runMinutes(w), lines,
-      tip: 'בעלייה תלך, בשטוח ובירידה מתונה רוץ בקלילות. המאמץ הנכון: אתה מצליח לדבר במשפטים (4 עד 5 מתוך 10). הליכה בירידה חדה, כדי לשמור על הברכיים.' };
+      tip: 'בעלייה תלך, בשטוח ובירידה מתונה רוץ בקלילות. המאמץ הנכון: אתה מצליח לדבר במשפטים (4 עד 5 מתוך 10). הליכה בירידה חדה, כדי לשמור על הברכיים. אחרי ההליכה המהירה: שתי דקות של נדנודי רגליים, סיבובי קרסוליים וחמישה סקוואטים, בלי מתיחות סטטיות.'
+        + (s.kind === 'long' && s.level >= 12 ? ' מדוד את המרחק עם הטלפון ורשום אותו בשדה ק"מ.' : '')
+        + (s.taper ? ' זו ריצת התאמה: עדיף מוקדם בבוקר, בשעה של המרוץ, עם הנעליים והבגדים של המרוץ.' : '') };
   }
   const t = tierOf(s.level);
-  return { title: label, minutes: 30, lines: STR[s.kind].map(e => e[0] + ': ' + e[1][t]),
-    tip: 'מנוחה של דקה בין סטים. טכניקה נקייה חשובה יותר ממספר החזרות. אם יש כאב חד, עוצרים.' };
+  return { title: label, minutes: 30, lines: STR[s.kind].map(e => (e[2] === 'push' ? e[0] + ' ' + PUSH[pushStep(s.level)] : e[0]) + ': ' + e[1][t]),
+    tip: 'מנוחה של דקה בין סטים. מפסיקים כשנשארו עוד 2 עד 3 חזרות בלי כשל. טכניקה נקייה חשובה יותר ממספר החזרות. אם יש כאב חד, עוצרים.' };
 }
 
 /* ---------- שלבי האימון למצב אימון (שעון ספירה) ---------- */
@@ -109,7 +113,7 @@ function segmentsFor(s) {
   STR[s.kind].forEach((e, ei, arr) => {
     const m = /^(\d+)×(.*)$/.exec(e[1][t]), sets = m ? +m[1] : 1, detail = m ? m[2].trim() : e[1][t], timed = /^(\d+) שניות/.exec(detail);
     for (let i = 1; i <= sets; i++) {
-      segs.push({ k: 'set', sec: timed ? +timed[1] : null, label: e[0], sub: 'סט ' + i + ' מתוך ' + sets + ' · ' + detail });
+      segs.push({ k: 'set', sec: timed ? +timed[1] : null, label: e[2] === 'push' ? e[0] + ' ' + PUSH[pushStep(s.level)] : e[0], sub: 'סט ' + i + ' מתוך ' + sets + ' · ' + detail });
       const last = i === sets && ei === arr.length - 1;
       if (!last) segs.push({ k: 'rest', sec: i < sets ? 45 : 60, label: 'מנוחה', sub: i < sets ? 'הסט הבא: ' + e[0] : 'התרגיל הבא: ' + arr[ei + 1][0] });
     }
@@ -223,6 +227,7 @@ function weekStats(st, wn) {
     longDone: runs.filter(s => s.kind === 'long').every(s => cr(s) >= 1),
     avgRpe: rpes.length ? rpes.reduce((a, b) => a + b, 0) / rpes.length : null,
     pain: st.painLog.some(p => p >= ws && p <= we),
+    maxSoreness: Math.max.apply(null, [0].concat(ss.filter(x => x.status === 'done' && x.log && x.log.soreness != null).map(x => x.log.soreness))),
     minutes: ss.filter(s => s.status === 'done' && s.log).reduce((a, s) => a + (s.log.minutes || 0), 0)
   };
 }
@@ -230,11 +235,14 @@ function reviewWeek(st, wn) {
   const x = weekStats(st, wn), from = st.level;
   let to = from, why;
   const ratio = x.runPlanned ? x.runCredit / x.runPlanned : 1;
-  if (x.pain) { to = Math.max(1, from - 1); why = 'היה כאב, אז חוזרים צעד אחורה ומתקדמים בזהירות. אם הכאב נמשך יותר משלושה ימים, כדאי להיבדק אצל רופא.'; }
+  const allRuns = x.runCredit >= x.runPlanned || (x.runPlanned >= 3 && x.runCredit >= x.runPlanned - 1 && x.longDone);
+  const easyEnough = x.avgRpe === null || x.avgRpe <= 6, notSore = x.maxSoreness <= 3;
+  if (x.pain) { to = Math.max(1, from - 1); why = 'היה כאב, אז חוזרים צעד אחורה ונחים 3 עד 5 ימים לפני שחוזרים. אם הכאב נמשך יותר משבוע, כדאי להיבדק אצל רופא.'; }
   else if (x.runPlanned && ratio < 0.34) { to = Math.max(1, from - 1); why = 'השבוע יצא חלש, וזה בסדר. חוזרים צעד אחורה כדי שהחזרה תהיה קלה.'; }
-  else if (ratio >= 0.66 && x.longDone && (x.avgRpe === null || x.avgRpe < 8)) { to = Math.min(16, from + 1, wn + 2); why = to > from ? 'שבוע טוב, ההתמדה והמאמץ מצוינים. עולים שלב.' : 'שבוע טוב. נשארים בשלב הנוכחי, כי אתה כבר מקדים את התוכנית.'; }
-  else if (x.avgRpe !== null && x.avgRpe >= 8) { why = 'האימונים הרגישו קשים מדי (8 ומעלה). חוזרים על אותו שלב, כדי שהגוף יתרגל.'; }
-  else { why = 'חלק מהאימונים לא בוצעו, לכן חוזרים על אותו שלב ולא קופצים קדימה.'; }
+  else if (allRuns && x.longDone && easyEnough && notSore) { to = Math.min(16, from + 1, wn + 2); why = to > from ? 'שבוע טוב: כל הריצות בוצעו, המאמץ היה סביר ואין כאבי שרירים. עולים שלב.' : 'שבוע טוב. נשארים בשלב הנוכחי, כי אתה כבר מקדים את התוכנית.'; }
+  else if (!easyEnough) { why = 'האימונים הרגישו קשים מדי (מעל 6 מתוך 10). חוזרים על אותו שלב, כדי שהגוף יתרגל.'; }
+  else if (!notSore) { why = 'היו כאבי שרירים חזקים (מעל 3 מתוך 10). חוזרים על אותו שלב, ואם הם חוזרים, מחליפים ריצה אחת בהליכה מהירה או באופניים.'; }
+  else { why = 'חלק מהריצות לא בוצעו, לכן חוזרים על אותו שלב ולא קופצים קדימה.'; }
   return { from, to, why, stats: x, week: wn };
 }
 function closeWeek(st, wn) { // סוגר את השבוע שהסתיים: אימונים שלא בוצעו נחשבים לא בוצעו, ושלב חדש
