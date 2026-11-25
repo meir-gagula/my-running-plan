@@ -11,7 +11,8 @@ function load() {
     if (r) {
       const o = Object.assign(E.newState(), JSON.parse(r));
       if (!o.weights.some(w => w.start)) o.weights.push({ date: '2026-11-18', kg: 113.6, start: true });   // משקל התחלה לפני הירידה
-      o.weights.forEach(w => { if (w.date === E.CFG.startWeightDate && w.kg === 109) w.kg = 111; });       // תיקון: 109 היה טעות
+      o.weights.forEach(w => { if (w.date === E.CFG.startWeightDate && w.kg === 109) w.kg = 111; });
+      if (o.settings.weighTime === '08:00') o.settings.weighTime = '10:00';       // תיקון: 109 היה טעות
       return o;
     }
   } catch (e) {}
@@ -29,7 +30,7 @@ function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
 function dirty() { st.icsDirty = true; save(); }
 
 /* ---------- תחזוקה בכל פתיחה ---------- */
-function curWeek() { const t = todayIso(); return t < E.CFG.start ? 1 : E.weekNo(t); }
+function curWeek() { return Math.max(0, E.weekNo(todayIso())); }
 function maintain() {
   const t = todayIso(), cw = E.weekNo(t);
   for (let w = 1; w < cw && w <= E.CFG.lastWeek; w++) {
@@ -51,9 +52,17 @@ function render() {
 }
 
 /* ---------- כרטיס אימון ---------- */
+function logSummary(s) {
+  const l = s.log; if (!l) return '';
+  const p = [];
+  if (l.substitute === 'walk') p.push('הליכה מהירה במקום ריצה'); else if (l.substitute === 'activity') p.push('הוחלף בפעילות אחרת');
+  if (l.minutes) p.push(l.minutes + ' דקות'); if (l.km) p.push(l.km + ' ק"מ'); if (l.rpe) p.push('מאמץ ' + l.rpe + ' מתוך 10');
+  if (l.soreness != null && !l.substitute) p.push('כאבי שרירים מהאימון הקודם ' + l.soreness); if (l.pain) p.push('היה כאב');
+  return '<div class="mut" style="margin-top:6px">✓ בוצע: ' + esc(p.join(' · ')) + '</div>';
+}
 function sessionCard(s, big) {
   const d = E.describe(s), tg = s.status === 'done' ? '<span class="tag ok">בוצע</span>' : s.status === 'skipped' ? '<span class="tag">לא בוצע</span>' : s.postponed ? '<span class="tag warn">נדחה לעוד היום</span>' : '';
-  let h = '<div class="card"><h2>' + esc(d.title) + tg + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + ' · כ-' + d.minutes + ' דקות · שלב ' + s.level + '</div>';
+  let h = '<div class="card"><h2>' + esc(d.title) + tg + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + ' · כ-' + d.minutes + ' דקות · שלב ' + s.level + '</div>' + logSummary(s);
   if (big || s.status === 'planned') h += '<ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul><div class="tip">' + esc(d.tip) + '</div>';
   if (s.status === 'planned') h += '<div class="row"><button class="b coral" style="flex-basis:100%" data-act="livestart" data-sid="' + s.id + '">▶️ התחל אימון</button><button class="b alt" data-act="done" data-sid="' + s.id + '">✅ בוצע</button><button class="b alt" data-act="later" data-sid="' + s.id + '">⏰ היום, אחר כך</button><button class="b alt" data-act="unsure" data-sid="' + s.id + '">🤔 לא בטוח</button></div>';
   return h + '</div>';
@@ -69,7 +78,8 @@ function vToday() {
     h += '<div class="card banner"><h3>לא עדכנת על ' + esc(d.title) + ' של יום ' + E.dayName(s.date) + '</h3><div class="mut">מה קרה?</div><div class="row"><button class="b alt" data-act="done" data-sid="' + s.id + '">בוצע בעצם</button><button class="b" data-act="unsure" data-sid="' + s.id + '">לא בוצע</button></div></div>';
   });
   if (t > E.CFG.race) { const x = E.totals(st); return $('#main').innerHTML = h + '<div class="card good"><h2>סיימת את המסע 🎉</h2><p>' + x.runs + ' ריצות, ' + x.strength + ' אימוני כוח, ' + x.minutes + ' דקות של אימון. מה שבנית נשאר איתך.</p></div>'; }
-  if (st.plannedWeeks.indexOf(wn) < 0 && wn <= E.CFG.lastWeek) {
+  if (wn === 0 && st.plannedWeeks.indexOf(1) < 0) h += '<div class="card banner"><h2>שבוע 1 מתחיל ביום שישי ' + E.fmt(E.CFG.start) + '</h2><p>עד אז: הריצה של היום, ומחר מנוחה. ביום שישי נתכנן את השבוע לפי הימים שלך (אפשר גם כבר עכשיו).</p><div class="row"><button class="b alt" data-act="plan" data-wn="1">לתכנון שבוע 1</button></div></div>';
+  if (wn >= 1 && st.plannedWeeks.indexOf(wn) < 0 && wn <= E.CFG.lastWeek) {
     const early = t < E.CFG.start;
     h += '<div class="card banner"><h2>' + (early ? 'מתחילים ביום שישי ' + E.fmt(E.CFG.start) : 'שבוע חדש: ' + wn + ' מתוך 16') + '</h2><p>' + (early ? 'אפשר כבר עכשיו לתכנן את השבוע הראשון.' : 'עוד לא תכננו את השבוע. נסכם את הקודם ונסדר את הימים.') + '</p><div class="row"><button class="b coral" data-act="plan" data-wn="' + wn + '">לתכנון השבוע</button></div></div>';
   }
@@ -93,17 +103,17 @@ function vToday() {
 let viewWeek = null;
 function weekRows(wn) {   // שורות לשבוע: מה שנשמר, או הצעת האפליקציה / תחזית
   const planned = st.plannedWeeks.indexOf(wn) >= 0, real = st.sessions.filter(s => s.week === wn && s.kind !== 'race' && !s.dropped);
-  if (planned || real.length) return { list: real, kind: 'real' };
-  const cw = curWeek(), lvl = wn <= cw ? st.level : Math.min(16, st.level + (wn - cw));
+  if (wn === 0 || planned || real.length) return { list: real, kind: 'real' };
+  const cw = Math.max(curWeek(), 1), lvl = wn <= cw ? st.level : Math.min(16, st.level + (wn - cw));
   return { list: E.previewWeek(lvl, wn), kind: wn === cw ? 'proposal' : 'forecast', level: lvl };
 }
 function vWeek() {
-  $('#title').textContent = 'השבוע'; const t = todayIso(), cw = curWeek(), wn = Math.min(16, Math.max(1, viewWeek || cw));
+  $('#title').textContent = 'השבוע'; const t = todayIso(), cw = curWeek(), wn = Math.min(16, Math.max(0, viewWeek == null ? cw : viewWeek)), hasW0 = st.sessions.some(x => x.week === 0);
   const r = weekRows(wn), race = st.sessions.find(s => s.kind === 'race');
-  let h = '<div class="card"><div class="row" style="margin:0 0 8px;align-items:center"><button class="b alt sm" data-act="weekgo" data-wn="' + (wn - 1) + '" ' + (wn <= 1 ? 'disabled' : '') + ' aria-label="השבוע הקודם">›</button><div style="flex:3;text-align:center"><h2 style="margin:0">שבוע ' + wn + ' מתוך 16</h2><div class="mut">' + E.fmt(E.weekStartOf(wn)) + ' עד ' + E.fmt(E.addDays(E.weekStartOf(wn), 6)) + (wn === cw ? ' · השבוע הנוכחי' : '') + '</div></div><button class="b alt sm" data-act="weekgo" data-wn="' + (wn + 1) + '" ' + (wn >= 16 ? 'disabled' : '') + ' aria-label="השבוע הבא">‹</button></div>';
+  let h = '<div class="card"><div class="row" style="margin:0 0 8px;align-items:center"><button class="b alt sm" data-act="weekgo" data-wn="' + (wn - 1) + '" ' + (wn <= (hasW0 ? 0 : 1) ? 'disabled' : '') + ' aria-label="השבוע הקודם">›</button><div style="flex:3;text-align:center"><h2 style="margin:0">' + (wn === 0 ? 'שבוע פתיחה' : 'שבוע ' + wn + ' מתוך 16') + '</h2><div class="mut">' + E.fmt(wn === 0 ? E.CFG.firstDay : E.weekStartOf(wn)) + ' עד ' + E.fmt(E.addDays(E.weekStartOf(wn), 6)) + (wn === cw ? ' · השבוע הנוכחי' : '') + '</div></div><button class="b alt sm" data-act="weekgo" data-wn="' + (wn + 1) + '" ' + (wn >= 16 ? 'disabled' : '') + ' aria-label="השבוע הבא">‹</button></div>';
   if (r.kind === 'proposal') h += '<div class="tip">זו הצעה של האפליקציה, עוד לא אושרה. אם כל הימים פנויים, זה הסידור. כדי לבחור ימים אחרים או לאשר, לחץ על "תכנון השבוע".</div>';
   if (r.kind === 'forecast') h += '<div class="tip">תחזית בלבד (שלב ' + r.level + '), בהנחה שהכול מתקדם כמתוכנן. היא תתעדכן לפי הביצוע בפועל.</div>';
-  E.weekDates(wn).forEach(d => {
+  E.weekDatesVisible(wn).forEach(d => {
     const ss = r.list.filter(s => s.date === d);
     if (wn === 16 && d === E.CFG.race) ss.push(race);
     h += '<div class="wk' + (d === t ? ' today' : '') + '"><div class="d">' + E.dayName(d) + '<small>' + E.fmt(d) + '</small></div><div class="t">';
@@ -111,20 +121,20 @@ function vWeek() {
     ss.forEach(s => {
       const x = E.describe(s);
       if (s.status === 'preview') h += '<details><summary>' + esc(x.title) + ' <span class="mut">' + x.minutes + ' דק׳</span></summary><ul class="l">' + x.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul></details>';
-      else h += '<div class="st-' + s.status + '"><a href="#" data-act="detail" data-sid="' + s.id + '" style="color:inherit">' + esc(x.title) + '</a> <span class="mut">' + x.minutes + ' דק׳</span>' + (s.status === 'done' ? ' ✓' : '') + '</div>';
+      else h += '<div class="st-' + s.status + '"><a href="#" data-act="detail" data-sid="' + s.id + '" style="color:inherit">' + esc(x.title) + '</a> <span class="mut">' + x.minutes + ' דק׳</span>' + (s.status === 'done' ? ' ✓ בוצע' + (s.log && s.log.minutes ? ' · ' + s.log.minutes + ' דק׳' + (s.log.rpe ? ' · מאמץ ' + s.log.rpe : '') : '') : s.status === 'skipped' ? ' ✗ לא בוצע' : '') + '</div>';
     });
     h += '</div></div>';
   });
-  h += '<div class="row">' + (wn === cw ? '<button class="b coral" data-act="plan" data-wn="' + wn + '">' + (r.kind === 'real' ? 'תכנון מחדש של השבוע' : 'תכנון השבוע') + '</button>' : '') + '<button class="b alt" data-act="allweeks">כל השבועות</button>' + (wn !== cw ? '<button class="b alt" data-act="weekgo" data-wn="' + cw + '">לשבוע הנוכחי</button>' : '') + '</div></div>';
+  h += '<div class="row">' + (wn === Math.max(cw, 1) ? '<button class="b coral" data-act="plan" data-wn="' + wn + '">' + (r.kind === 'real' ? 'תכנון מחדש של השבוע' : 'תכנון השבוע') + '</button>' : '') + '<button class="b alt" data-act="allweeks">כל השבועות</button>' + (wn !== cw ? '<button class="b alt" data-act="weekgo" data-wn="' + cw + '">לשבוע הנוכחי</button>' : '') + '</div></div>';
   h += '<div class="card"><h3>רשמת משחק או פעילות אחרת?</h3><div class="mut">טניס, כדורסל וכדומה. אפשר שזה יחליף ריצה קלה.</div><div class="row"><button class="b alt" data-act="activity">רישום פעילות</button>' + (NATIVE ? '' : '<button class="b alt" data-act="ics">עדכון יומן (לא חובה)</button>') + '</div></div>';
   $('#main').innerHTML = h;
 }
 function allWeeksSheet() {
   const cw = curWeek(); let h = '<h2>כל השבועות</h2><div class="mut">שבוע מתחיל בשישי. המרוץ: שישי 19.3.</div>';
-  for (let w = 1; w <= 16; w++) {
+  for (let w = st.sessions.some(x => x.week === 0) ? 0 : 1; w <= 16; w++) {
     const r = weekRows(w), lvl = r.kind === 'real' ? (r.list[0] ? r.list[0].level : st.level) : r.level, long = r.list.find(s => s.kind === 'long') || r.list.find(s => s.kind === 'easy1');
     const x = E.weekStats(st, w), status = r.kind === 'real' ? (w < cw ? 'בוצע ' + x.runCredit + ' מתוך ' + x.runPlanned + ' ריצות' : 'מתוכנן') : (r.kind === 'proposal' ? 'הצעה' : 'תחזית');
-    h += '<div class="card" data-act="weekgo" data-wn="' + w + '" style="cursor:pointer;' + (w === cw ? 'border-color:var(--coral)' : '') + '"><h3>שבוע ' + w + ' · ' + E.fmt(E.weekStartOf(w)) + ' <span class="tag' + (w === cw ? ' coral' : '') + '">' + status + '</span></h3><div class="mut">שלב ' + lvl + (long ? ' · ' + (long.kind === 'long' ? 'ארוכה' : 'קלה') + ': ' + E.describe(long).lines[1] : '') + '</div></div>';
+    h += '<div class="card" data-act="weekgo" data-wn="' + w + '" style="cursor:pointer;' + (w === cw ? 'border-color:var(--coral)' : '') + '"><h3>' + (w === 0 ? 'ריצת הפתיחה' : 'שבוע ' + w) + ' · ' + E.fmt(w === 0 ? E.CFG.firstDay : E.weekStartOf(w)) + ' <span class="tag' + (w === cw ? ' coral' : '') + '">' + status + '</span></h3><div class="mut">שלב ' + lvl + (long ? ' · ' + (long.kind === 'long' ? 'ארוכה' : 'קלה') + ': ' + E.describe(long).lines[1] : '') + '</div></div>';
   }
   h += '<div class="row"><button class="b alt" data-act="close">סגירה</button></div>'; sheet(h);
 }
@@ -157,12 +167,25 @@ function vWeight() {
   h += '<div class="card"><div class="mut">BMI ' + x.bmi.toFixed(1) + ': ' + E.bmiLabel(x.bmi) + (g.targetKg ? ' · יעד ' + g.targetKg + ' ק"ג (נשארו ' + Math.max(0, x.last.kg - g.targetKg).toFixed(1) + ')' : '') + '</div><p>' + esc(E.weightMessage(st)) + '</p><div class="mut">לפי הרופא והתזונאי: כל יעד משקל וקצב ירידה נקבעים איתם.</div></div>';
   h += '<div class="card"><h3>שקילה חדשה</h3><label for="wkg">משקל בק"ג, עם נקודה ומספר אחד אחריה (פעם בשבוע, ביום ' + E.dayName(E.weekDates(1)[(E.weighDay(st) - 5 + 7) % 7]) + ')</label><input id="wkg" type="number" inputmode="decimal" step="0.1" min="30" max="300" value="' + x.last.kg.toFixed(1) + '"><div class="row"><button class="b coral" data-act="addweight">שמירה</button></div></div>';
   if (w.length >= 2) {
-    const W = 320, H = 140, ks = w.map(p => p.kg), lo = Math.min.apply(null, ks.concat(g.targetKg || 999)) - 1, hi = Math.max.apply(null, ks) + 1;
-    const t0 = E.pd(w[0].date), t1 = Math.max(E.pd(w[w.length - 1].date), t0 + 864e5 * 7);
-    const px = p => 10 + (E.pd(p.date) - t0) / (t1 - t0) * (W - 20), py = k => 10 + (hi - k) / (hi - lo) * (H - 20);
-    let s = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img"><polyline fill="none" stroke="#16213a" stroke-width="2" points="' + w.map(p => px(p) + ',' + py(p.kg)).join(' ') + '"/>' + w.map(p => '<circle cx="' + px(p) + '" cy="' + py(p.kg) + '" r="4" fill="#f5b700"/>').join('');
-    if (g.targetKg) s += '<line x1="0" x2="' + W + '" y1="' + py(g.targetKg) + '" y2="' + py(g.targetKg) + '" stroke="#2f7d57" stroke-dasharray="4 4"/>';
-    h += '<div class="card"><h3>מגמה</h3>' + s + '</svg></div>';
+    const W = 320, PH = 112, GAP = 30, t0 = E.pd(w[0].date), t1 = Math.max(E.pd(w[w.length - 1].date), t0 + 864e5 * 7), px = p => 34 + (E.pd(p.date) - t0) / (t1 - t0) * (W - 44);
+    const panel = (top, vals, color, label, lines, dec) => {
+      const arr = vals.map(v => v.v), lo0 = Math.min.apply(null, arr.concat(lines.map(l => l.v))), hi0 = Math.max.apply(null, arr.concat(lines.map(l => l.v))), pad = (hi0 - lo0) * 0.12 || 1, lo = lo0 - pad, hi = hi0 + pad;
+      const py = v => top + 14 + (hi - v) / (hi - lo) * (PH - 22);
+      let q = '<text x="' + W + '" y="' + (top + 10) + '" font-size="11" text-anchor="end" fill="' + color + '" font-weight="700">' + label + '</text>';
+      [Math.min.apply(null, arr), Math.max.apply(null, arr)].forEach(v => { q += '<line x1="34" x2="' + W + '" y1="' + py(v) + '" y2="' + py(v) + '" stroke="#e8ecf4"/><text x="30" y="' + (py(v) + 4) + '" font-size="10" text-anchor="end" fill="#5d6882">' + v.toFixed(dec) + '</text>'; });
+      lines.forEach(l => { q += '<line x1="34" x2="' + W + '" y1="' + py(l.v) + '" y2="' + py(l.v) + '" stroke="' + l.c + '" stroke-dasharray="4 4"/><text x="36" y="' + (py(l.v) - 3) + '" font-size="10" fill="' + l.c + '">' + l.t + '</text>'; });
+      return q + '<polyline fill="none" stroke="' + color + '" stroke-width="2.5" points="' + vals.map(p => px(p) + ',' + py(p.v)).join(' ') + '"/>' + vals.map(p => '<circle cx="' + px(p) + '" cy="' + py(p.v) + '" r="3.5" fill="' + color + '"/>').join('');
+    };
+    const bm = w.map(p => E.bmi(p.kg, g.heightCm)), bl = [];
+    if (Math.max.apply(null, bm) >= 27) bl.push({ v: 30, c: '#b7791f', t: 'BMI 30' });
+    if (Math.min.apply(null, bm) <= 28) bl.push({ v: 25, c: '#2f7d57', t: 'BMI 25' });
+    const wl = g.targetKg ? [{ v: g.targetKg, c: '#2f7d57', t: 'יעד' }] : [];
+    const H2 = 2 * PH + GAP + 16;
+    h += '<div class="card"><h3>מגמה</h3><svg class="chart" viewBox="0 0 ' + W + ' ' + H2 + '" role="img" aria-label="גרף משקל וגרף BMI">' +
+      panel(0, w.map(p => ({ date: p.date, v: p.kg })), '#16213a', 'משקל (ק"ג)', wl, 1) +
+      panel(PH + GAP, w.map((p, i) => ({ date: p.date, v: bm[i] })), '#d9a000', 'BMI', bl, 1) +
+      '<text x="34" y="' + (H2 - 2) + '" font-size="10" fill="#5d6882">' + E.fmt(w[0].date) + '</text><text x="' + W + '" y="' + (H2 - 2) + '" font-size="10" text-anchor="end" fill="#5d6882">' + E.fmt(w[w.length - 1].date) + '</text></svg>' +
+      '<div class="mut">ה-BMI מחושב מהמשקל ומהגובה, ולכן שתי העקומות באותה צורה. בעקומת ה-BMI אפשר לראות את המרחק מהקווים 30 ו-25.</div></div>';
   }
   h += '<div class="card"><h3>היסטוריה</h3>' + w.slice().reverse().map(p => '<div class="wk" data-act="editw" data-d="' + p.date + '" style="cursor:pointer"><div class="d">' + (p.start ? 'התחלה' : E.fmt(p.date)) + '</div><div class="t">' + p.kg.toFixed(1) + ' ק"ג · BMI ' + E.bmi(p.kg, g.heightCm).toFixed(1) + ' <span class="mut">· עריכה</span></div></div>').join('') + '</div>';
   $('#main').innerHTML = h;
@@ -228,14 +251,16 @@ function planSheet(wn) {
   const rv = st.reviews.find(r => r.week === wn - 1), t = todayIso(), dates = E.weekDates(wn);
   let h = '<h2>תכנון שבוע ' + wn + '</h2>';
   if (rv && wn > 1) { const x = E.weekStats(st, wn - 1); h += '<div class="card"><h3>סיכום שבוע ' + (wn - 1) + '</h3><div>ריצות: ' + x.runCredit + ' מתוך ' + x.runPlanned + ' · כוח: ' + x.strCredit + ' מתוך ' + x.strPlanned + (x.avgRpe ? ' · מאמץ ממוצע ' + x.avgRpe.toFixed(1) : '') + '</div><div class="mut">' + esc(rv.why) + (rv.to !== rv.from ? ' (שלב ' + rv.from + ' ← ' + rv.to + ')' : ' (נשארים בשלב ' + rv.to + ')') + '</div></div>'; }
-  h += '<div class="card"><h3>באילו ימים אתה פנוי?</h3><div class="mut">סמן את הימים שאפשר לאמן בהם. האפליקציה תשבץ ותציע.</div><div class="days">' + dates.map(d => { const past = d < t; return '<label class="' + (past ? '' : 'on') + '" data-day="' + d + '"><input type="checkbox" value="' + d + '" ' + (past ? 'disabled' : 'checked') + '>' + E.dayName(d) + '<br><small>' + E.fmt(d) + '</small></label>'; }).join('') + '</div></div>';
+  const chips = noFri => dates.map(d => { const off = d < t || (noFri && E.dow(d) === 5); return '<label class="' + (off ? '' : 'on') + '" data-day="' + d + '"><input type="checkbox" value="' + d + '" ' + (off ? 'disabled' : 'checked') + '>' + E.dayName(d) + '<br><small>' + E.fmt(d) + '</small></label>'; }).join('');
+  h += '<div class="card"><h3>🏃 באילו ימים אתה פנוי לרוץ?</h3><div class="mut">שישי לא מסומן כי בו לא רצים. בין ריצות יהיה יום הפרש.</div><div class="days" data-g="run">' + chips(true) + '</div></div>';
+  h += '<div class="card"><h3>💪 ובאילו ימים אפשר אימון כוח?</h3><div class="mut">כוח אפשר גם בשישי. סמן בנפרד, כי לא תמיד אלה אותם ימים.</div><div class="days" data-g="str">' + chips(false) + '</div></div>';
   h += '<div id="props"></div><div class="row"><button class="b coral" data-act="propose">הצע לי תוכנית</button><button class="b alt" data-act="close">סגירה</button></div>';
   sheet(h);
   document.querySelectorAll('#sheet .days label').forEach(l => l.onclick = e => { e.preventDefault(); const i = l.querySelector('input'); if (i.disabled) return; i.checked = !i.checked; l.classList.toggle('on', i.checked); });
 }
 function propose() {
-  const avail = Array.from(document.querySelectorAll('#sheet .days input:checked')).map(i => i.value);
-  const r = E.proposeWeek(st, plan.wn, avail); plan.props = r;
+  const pick = g => Array.from(document.querySelectorAll('#sheet .days[data-g=' + g + '] input:checked')).map(i => i.value);
+  const r = E.proposeWeek(st, plan.wn, pick('run'), pick('str')); plan.props = r;
   if (!r.options.length) { $('#props').innerHTML = '<div class="card banner">אין ימים מתאימים. נסה לסמן עוד ימים (ריצות לא יכולות להיות בשישי, ולא בשני ימים ברצף).</div>'; return; }
   const names = { long: 'ריצה ארוכה', easy1: 'ריצה קלה', easy2: 'ריצה קלה', strA: 'כוח A', strB: 'כוח B' };
   $('#props').innerHTML = (r.dropped.length ? '<div class="card banner">לא נכנסים השבוע: ' + r.dropped.map(k => names[k]).join(', ') + '. הסדר: קודם הריצות, אחר כך הכוח.</div>' : '') +
@@ -320,7 +345,7 @@ document.addEventListener('click', e => {
   else if (a === 'livestart') liveStart(sid);
   else if (a === 'ics') downloadICS();
   else if (a === 'close') closeSheet();
-  else if (a === 'detail') { e.preventDefault(); const s = st.sessions.find(x => x.id === sid), d = E.describe(s); sheet('<h2>' + esc(d.title) + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + '</div><ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul><div class="tip">' + esc(d.tip) + '</div><div class="row">' + (s.status === 'planned' ? '<button class="b coral" data-act="done" data-sid="' + sid + '">✅ בוצע</button><button class="b alt" data-act="unsure" data-sid="' + sid + '">🤔 לא בטוח</button>' : '') + '<button class="b alt" data-act="close">סגירה</button></div>'); }
+  else if (a === 'detail') { e.preventDefault(); const s = st.sessions.find(x => x.id === sid), d = E.describe(s); sheet('<h2>' + esc(d.title) + '</h2><div class="mut">' + E.dayName(s.date) + ' ' + E.fmt(s.date) + '</div><ul class="l">' + d.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul>' + logSummary(s) + '<div class="tip">' + esc(d.tip) + '</div><div class="row">' + (s.status === 'planned' ? '<button class="b coral" style="flex-basis:100%" data-act="livestart" data-sid="' + sid + '">▶️ התחל אימון</button><button class="b alt" data-act="done" data-sid="' + sid + '">✅ בוצע</button><button class="b alt" data-act="unsure" data-sid="' + sid + '">🤔 לא בטוח</button>' : '') + '<button class="b alt" data-act="close">סגירה</button></div>'); }
   else if (a === 'addweight') { if (saveWeight($('#wkg').value)) { render(); } }
   else if (a === 'todayweight') { if (saveWeight($('#tw').value)) { render(); } }
   else if (a === 'savesettings') { st.settings.reminder = $('#rem').value || '17:00'; st.settings.weighTime = $('#wt').value || '08:00'; st.settings.weighDay = +$('#wd').value; st.settings.heightCm = +$('#ht').value || 182; st.settings.targetKg = +$('#tg').value || null; dirty(); toast('נשמר. לחץ על הורדת קובץ יומן כדי לעדכן את השעה.'); }
@@ -424,6 +449,7 @@ function cueFor(g) {
   else { beep(440, 300); vibe([200]); speak('מנוחה'); }
 }
 function liveStart(sid) {
+  closeSheet();
   const s = st.sessions.find(x => x.id === sid), segs = E.segmentsFor(s); if (!segs.length) return toast('אין מצב אימון לאימון הזה');
   try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume && actx.resume(); } catch (e) {}
   live = { sid, segs, idx: 0, segStart: Date.now(), pausedAt: null, done: false, startedAt: Date.now(), activeMs: 0, manualMs: 0 };
@@ -476,7 +502,7 @@ function liveDraw(force) {
     el.dataset.idx = live.idx; el.dataset.p = String(!!live.pausedAt);
     el.style.background = KCOL[g.k]; el.style.color = KTXT[g.k];
     let rows = live.segs.map((x, i) => '<div class="lr ' + (i < live.idx ? 'ld' : i === live.idx ? 'lc' : '') + '" ' + (i === live.idx ? 'id="lcur"' : '') + '><span>' + (i < live.idx ? '✓' : i === live.idx ? '●' : '○') + '</span><span class="lt">' + KEMO[x.k] + ' ' + esc(x.label) + (x.sub && x.k !== 'walk' && x.k !== 'run' ? ' <small>' + esc(x.sub.split(' · ')[0]) + '</small>' : '') + '</span><span>' + (x.sec == null ? 'סט' : mmss(x.sec * 1000)) + '</span></div>').join('');
-    el.innerHTML = '<div class="lt-top"><div><b>' + esc(d.title) + '</b><div class="lm">סה״כ <span id="lsum"></span> מתוך ' + mmss(totalMs) + '</div></div><div class="lbtns"><button data-act="liveopt" data-o="liveSound" aria-label="קול">' + (st.settings.liveSound === false ? '🔇' : '🔊') + '</button><button data-act="liveopt" data-o="liveVibe" aria-label="רטט">' + (st.settings.liveVibe === false ? '📴' : '📳') + '</button></div></div>' +
+    el.innerHTML = '<div class="lt-top"><div><b>' + esc(d.title) + '</b><div class="lm">עבר <span id="lsum"></span> מתוך ' + mmss(totalMs) + ' · נותרו <b id="lrem"></b></div></div><div class="lbtns"><button data-act="liveopt" data-o="liveSound" aria-label="קול">' + (st.settings.liveSound === false ? '🔇' : '🔊') + '</button><button data-act="liveopt" data-o="liveVibe" aria-label="רטט">' + (st.settings.liveVibe === false ? '📴' : '📳') + '</button></div></div>' +
       '<div class="lbar"><i id="lbari"></i></div>' +
       '<div class="lmain"><div class="lk">' + KEMO[g.k] + ' ' + esc(g.label) + (live.pausedAt ? ' · מושהה' : '') + '</div><div class="lbig" id="lbig"></div><div class="ls">' + esc(g.sub || '') + '</div>' +
       (g.sec == null && !live.pausedAt ? '<button class="lset" data-act="liveset">סיימתי את הסט ✓</button>' : '') +
@@ -487,6 +513,7 @@ function liveDraw(force) {
   }
   const big = $('#lbig'); if (big) big.textContent = timeTxt;
   const sum = $('#lsum'); if (sum) sum.textContent = mmss(doneMs);
+  const rm = $('#lrem'); if (rm) rm.textContent = mmss(totalMs - doneMs);
   const bi = $('#lbari'); if (bi) bi.style.width = Math.min(100, doneMs / totalMs * 100) + '%';
 }
 function liveFinishScreen() {

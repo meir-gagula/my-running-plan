@@ -2,7 +2,7 @@
 (function (root) {
 'use strict';
 const DAY = 864e5;
-const CFG = { start: '2026-11-27', race: '2027-03-19', lastWeek: 16, startWeight: 111, startWeightDate: '2026-11-25', heightCm: 182 };
+const CFG = { firstDay: '2026-11-25', start: '2026-11-27', race: '2027-03-19', lastWeek: 16, startWeight: 111, startWeightDate: '2026-11-25', heightCm: 182 };
 const DAYNAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
 /* ---------- תאריכים (UTC, כדי שלא יהיו קפיצות שעון קיץ) ---------- */
@@ -13,6 +13,7 @@ function dow(s) { return new Date(pd(s)).getUTCDay(); }           // 0=ראשו�
 function diff(a, b) { return Math.round((pd(b) - pd(a)) / DAY); }
 function weekStart(s) { return addDays(s, -((dow(s) - 5 + 7) % 7)); } // שבוע מתחיל בשישי
 function weekNo(s) { return Math.floor(diff(CFG.start, weekStart(s)) / 7) + 1; }
+function weekDatesVisible(n) { return weekDates(n).filter(d => n !== 0 || d >= CFG.firstDay); }
 function weekStartOf(n) { return addDays(CFG.start, (n - 1) * 7); }
 function weekDates(n) { const ws = weekStartOf(n); return [0, 1, 2, 3, 4, 5, 6].map(i => addDays(ws, i)); }
 function dayName(s) { return DAYNAMES[dow(s)]; }
@@ -125,7 +126,7 @@ function segmentsFor(s) {
 function newState() {
   return {
     v: 1,
-    settings: { reminder: '17:00', weighTime: '08:00', weighDay: 2, heightCm: CFG.heightCm, targetKg: null, notify: false },
+    settings: { reminder: '17:00', weighTime: '10:00', weighDay: 2, heightCm: CFG.heightCm, targetKg: null, notify: false },
     level: 1, sessions: [{ id: 'race', week: 17, kind: 'race', date: CFG.race, level: 16, status: 'planned', seq: 0 }],
     activities: [], weights: [{ date: '2026-11-18', kg: 113.6, start: true }, { date: CFG.startWeightDate, kg: CFG.startWeight }], reviews: [], painLog: [], plannedWeeks: []
   };
@@ -159,9 +160,9 @@ function scoreAssign(items) {
   }
   return sc;
 }
-// מחזיר עד 3 הצעות שונות, מהטובה לפחות טובה
-function proposals(kinds, days, fixed) {
-  const all = [], used = new Array(days.length).fill(false), pick = [];
+// מחזיר עד 3 הצעות שונות, מהטובה לפחות טובה. dayOf(kind) = הימים הפנויים לאותו סוג אימון
+function proposals(kinds, dayOf, fixed) {
+  const all = [], used = {}, pick = [];
   (function rec(i) {
     if (i === kinds.length) {
       const items = kinds.map((k, n) => ({ kind: k, date: pick[n] })).concat(fixed);
@@ -170,9 +171,11 @@ function proposals(kinds, days, fixed) {
       all.push({ sc: scoreAssign(items), items: kinds.map((k, n) => ({ kind: k, date: pick[n] })) });
       return;
     }
+    const days = dayOf(kinds[i]);
     for (let j = 0; j < days.length; j++) {
-      if (used[j] || blocked(days[j], kinds[i])) continue;
-      used[j] = true; pick[i] = days[j]; rec(i + 1); used[j] = false;
+      const d = days[j];
+      if (used[d] || blocked(d, kinds[i])) continue;
+      used[d] = true; pick[i] = d; rec(i + 1); used[d] = false;
     }
   })(0);
   all.sort((a, b) => b.sc - a.sc);
@@ -184,18 +187,21 @@ function proposals(kinds, days, fixed) {
   }
   return out;
 }
-// הצעות לשבוע: לא משנה את המצב
-function proposeWeek(st, wn, avail) {
+// הצעות לשבוע: לא משנה את המצב. availRun = ימים פנויים לריצה, availStr = ימים פנויים לכוח (אם לא ניתנו: אותם ימים)
+function proposeWeek(st, wn, availRun, availStr) {
+  if (!availStr) availStr = availRun;
   const done = st.sessions.filter(s => s.week === wn && s.status === 'done');
   const doneKinds = done.map(s => s.kind);
   const wanted = weekKinds(wn).filter(k => doneKinds.indexOf(k) < 0);
   const fixed = done.map(s => ({ kind: s.kind, date: s.date }));
-  const days = avail.filter(d => !fixed.some(f => f.date === d));
-  const kinds = wanted.filter(k => days.some(d => !blocked(d, k)));   // סוגים שיש להם לפחות יום אחד מתאים
+  const free = list => list.filter(d => !fixed.some(f => f.date === d));
+  const runDays = free(availRun), strDays = free(availStr), dayOf = k => isRun(k) ? runDays : strDays;
+  const kinds = wanted.filter(k => dayOf(k).some(d => !blocked(d, k)));   // סוגים שיש להם לפחות יום אחד מתאים
+  const maxDays = Object.keys(runDays.concat(strDays).reduce((o, d) => (o[d] = 1, o), {})).length;
   let chosen = [];   // בוחרים לפי סדר עדיפות: כל סוג נכנס אם עדיין אפשר לשבץ אותו
-  kinds.forEach(k => { if (chosen.length < days.length && proposals(chosen.concat(k), days, fixed).length) chosen = chosen.concat(k); });
+  kinds.forEach(k => { if (chosen.length < maxDays && proposals(chosen.concat(k), dayOf, fixed).length) chosen = chosen.concat(k); });
   if (!chosen.length) return { options: [], dropped: wanted };
-  return { options: proposals(chosen, days, fixed), dropped: wanted.filter(w => chosen.indexOf(w) < 0) };
+  return { options: proposals(chosen, dayOf, fixed), dropped: wanted.filter(w => chosen.indexOf(w) < 0) };
 }
 // מחיל הצעה על המצב
 function applyWeek(st, wn, option, dropped) {
@@ -415,7 +421,7 @@ function buildICS(st, today) {
   return L.join('\r\n');
 }
 
-root.Engine = { CFG, DAYNAMES, LEVELS, KIND_LABEL, pd, iso, addDays, dow, diff, weekStart, weekNo, weekStartOf, weekDates, dayName, fmt, isRun, isStr,
+root.Engine = { CFG, DAYNAMES, LEVELS, KIND_LABEL, pd, iso, addDays, dow, diff, weekStart, weekNo, weekStartOf, weekDates, weekDatesVisible, dayName, fmt, isRun, isStr,
   describe, workoutFor, previewWeek, segmentsFor, newState, proposeWeek, applyWeek, weekStats, reviewWeek, closeWeek, behindBy, markDone, missedSessions, suggest, applyAction,
   activityImpact, replaceWithActivity, bmi, bmiLabel, weighDay, weighDue, round1, weightList, weightSummary, weightMessage, streak, totals, cheer, buildICS, blocked, runCountLeft };
 })(typeof window !== 'undefined' ? window : globalThis);
