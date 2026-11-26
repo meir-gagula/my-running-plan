@@ -12,7 +12,12 @@ function load() {
       const o = Object.assign(E.newState(), JSON.parse(r));
       if (!o.weights.some(w => w.start)) o.weights.push({ date: '2026-11-18', kg: 113.6, start: true });   // משקל התחלה לפני הירידה
       o.weights.forEach(w => { if (w.date === E.CFG.startWeightDate && w.kg === 109) w.kg = 111; });
-      if (o.settings.weighTime === '08:00') o.settings.weighTime = '10:00';       // תיקון: 109 היה טעות
+      if (o.settings.weighTime === '08:00') o.settings.weighTime = '10:00';
+      if (!o.v || o.v < 2) {   // מעבר לשבוע שבת עד שישי: תוכניות שבועיות ישנות נמחקות (רק מה שבוצע נשמר) ומתכננים מחדש
+        o.sessions = o.sessions.filter(s => s.kind === 'race' || s.status === 'done' || s.week === 0);
+        o.sessions.forEach(s => { s.week = s.kind === 'race' ? 16 : Math.max(0, E.weekNo(s.date)); });
+        o.plannedWeeks = o.plannedWeeks.filter(w => w === 0); o.reviews = []; o.v = 2;
+      }       // תיקון: 109 היה טעות
       return o;
     }
   } catch (e) {}
@@ -33,6 +38,8 @@ function dirty() { st.icsDirty = true; save(); }
 function curWeek() { return Math.max(0, E.weekNo(todayIso())); }
 function maintain() {
   const t = todayIso(), cw = E.weekNo(t);
+  if (st.sessions.some(s => s.week === 0) && !st.sessions.some(s => s.id === '0-strA') && t <= '2026-11-27')
+    st.sessions.push({ id: '0-strA', week: 0, kind: 'strA', date: '2026-11-27', level: 1, status: 'planned', seq: 0, taper: false });
   for (let w = 1; w < cw && w <= E.CFG.lastWeek; w++) {
     if (st.reviews.some(r => r.week === w)) continue;
     if (st.plannedWeeks.indexOf(w) >= 0) E.closeWeek(st, w);
@@ -78,17 +85,19 @@ function vToday() {
     h += '<div class="card banner"><h3>לא עדכנת על ' + esc(d.title) + ' של יום ' + E.dayName(s.date) + '</h3><div class="mut">מה קרה?</div><div class="row"><button class="b alt" data-act="done" data-sid="' + s.id + '">בוצע בעצם</button><button class="b" data-act="unsure" data-sid="' + s.id + '">לא בוצע</button></div></div>';
   });
   if (t > E.CFG.race) { const x = E.totals(st); return $('#main').innerHTML = h + '<div class="card good"><h2>סיימת את המסע 🎉</h2><p>' + x.runs + ' ריצות, ' + x.strength + ' אימוני כוח, ' + x.minutes + ' דקות של אימון. מה שבנית נשאר איתך.</p></div>'; }
-  if (wn === 0 && st.plannedWeeks.indexOf(1) < 0) h += '<div class="card banner"><h2>שבוע 1 מתחיל ביום שישי ' + E.fmt(E.CFG.start) + '</h2><p>עד אז: הריצה של היום, ומחר מנוחה. ביום שישי נתכנן את השבוע לפי הימים שלך (אפשר גם כבר עכשיו).</p><div class="row"><button class="b alt" data-act="plan" data-wn="1">לתכנון שבוע 1</button></div></div>';
+  const fri = E.dow(t) === 5, nx = wn + 1;
+  if (fri && nx >= 1 && nx <= E.CFG.lastWeek && st.plannedWeeks.indexOf(nx) < 0) h += '<div class="card banner"><h2>📅 היום מתכננים את שבוע ' + nx + '</h2><p>השבוע הבא מתחיל מחר, שבת ' + E.fmt(E.weekStartOf(nx)) + ', ונגמר בשישי ' + E.fmt(E.addDays(E.weekStartOf(nx), 6)) + '. נסכם את השבוע הזה ונבחר ימים לריצה ולכוח.</p><div class="row"><button class="b coral" data-act="plan" data-wn="' + nx + '">לתכנון השבוע הבא</button></div></div>';
+  else if (wn === 0 && st.plannedWeeks.indexOf(1) < 0) h += '<div class="card banner"><h2>שבוע 1 מתחיל בשבת ' + E.fmt(E.CFG.start) + '</h2><p>שבוע הפתיחה נגמר ביום שישי ' + E.fmt(E.addDays(E.CFG.start, -1)) + ' עם אימון כוח. ביום שישי מתכננים את שבוע 1 (שבת עד שישי). אפשר גם כבר עכשיו.</p><div class="row"><button class="b alt" data-act="plan" data-wn="1">לתכנון שבוע 1</button></div></div>';
   if (wn >= 1 && st.plannedWeeks.indexOf(wn) < 0 && wn <= E.CFG.lastWeek) {
     const early = t < E.CFG.start;
-    h += '<div class="card banner"><h2>' + (early ? 'מתחילים ביום שישי ' + E.fmt(E.CFG.start) : 'שבוע חדש: ' + wn + ' מתוך 16') + '</h2><p>' + (early ? 'אפשר כבר עכשיו לתכנן את השבוע הראשון.' : 'עוד לא תכננו את השבוע. נסכם את הקודם ונסדר את הימים.') + '</p><div class="row"><button class="b coral" data-act="plan" data-wn="' + wn + '">לתכנון השבוע</button></div></div>';
+    h += '<div class="card banner"><h2>' + (early ? 'מתחילים בשבת ' + E.fmt(E.CFG.start) : 'שבוע חדש: ' + wn + ' מתוך 16') + '</h2><p>' + (early ? 'אפשר כבר עכשיו לתכנן את השבוע הראשון.' : 'עוד לא תכננו את השבוע. נסכם את הקודם ונסדר את הימים.') + '</p><div class="row"><button class="b coral" data-act="plan" data-wn="' + wn + '">לתכנון השבוע</button></div></div>';
   }
   if (!NATIVE && st.icsDirty) h += '<div class="card"><h3>היומן לא מעודכן</h3><div class="mut">התוכנית השתנתה. כדי שהתזכורת תקפוץ ביומן בשעה הנכונה, הורד קובץ יומן ופתח אותו.</div><div class="row"><button class="b alt" data-act="ics">עדכון היומן</button></div></div>';
   const wd = E.weighDue(st, t);
   if (wd) h += '<div class="card banner"><h2>⚖️ ' + (wd.today ? 'יום שקילה' : 'עוד לא נשקלת השבוע') + '</h2><div class="mut">לפני האימון, בבוקר, אחרי שירותים ולפני אכילה. מספר אחד אחרי הנקודה, למשל 108.4</div><input id="tw" type="number" inputmode="decimal" step="0.1" min="30" max="300" placeholder="' + E.weightList(st).slice(-1)[0].kg.toFixed(1) + '" style="margin-top:8px"><div class="row"><button class="b coral" data-act="todayweight">שמירת משקל</button></div></div>';
   if (t < E.CFG.start && !st.sessions.some(x => x.week === 0)) {
     const smp = { kind: 'easy1', level: 1 }, dd = E.describe(smp), ww = E.workoutFor(smp);
-    h += '<div class="card banner"><h2>רוצה להתחיל כבר היום?</h2><p>ריצה קלה ראשונה, כ-' + dd.minutes + ' דקות: חימום, ' + (ww.cont ? ww.cont + ' דקות ריצה' : 'דקה ריצה ושתי דקות הליכה (' + ww.reps + ' פעמים)') + ', וקירור. אחרי זה נחים עד שישי, ושבוע 1 מתחיל כרגיל.</p><div class="row"><button class="b coral" data-act="startnow">🏃 מתחילים היום</button><button class="b alt" data-act="pastopening">כבר ביצעתי ב-' + E.fmt(E.CFG.firstDay) + '</button></div></div>';
+    h += '<div class="card banner"><h2>רוצה להתחיל כבר היום?</h2><p>ריצה קלה ראשונה, כ-' + dd.minutes + ' דקות: חימום, ' + (ww.cont ? ww.cont + ' דקות ריצה' : 'דקה ריצה ושתי דקות הליכה (' + ww.reps + ' פעמים)') + ', וקירור. אחרי זה נחים, בשישי אימון כוח קל, ושבוע 1 מתחיל בשבת.</p><div class="row"><button class="b coral" data-act="startnow">🏃 מתחילים היום</button><button class="b alt" data-act="pastopening">כבר ביצעתי ב-' + E.fmt(E.CFG.firstDay) + '</button></div></div>';
   }
   const today = st.sessions.filter(s => s.date === t);
   if (t === E.CFG.race) h += sessionCard(today.find(s => s.kind === 'race'), true);
@@ -108,7 +117,7 @@ function weekRows(wn) {   // שורות לשבוע: מה שנשמר, או הצע
   const planned = st.plannedWeeks.indexOf(wn) >= 0, real = st.sessions.filter(s => s.week === wn && s.kind !== 'race' && !s.dropped);
   if (wn === 0 || planned || real.length) return { list: real, kind: 'real' };
   const cw = Math.max(curWeek(), 1), lvl = wn <= cw ? st.level : Math.min(16, st.level + (wn - cw));
-  return { list: E.previewWeek(lvl, wn), kind: wn === cw ? 'proposal' : 'forecast', level: lvl };
+  return { list: E.previewWeek(lvl, wn), kind: (wn === cw || wn === cw + 1 || wn === curWeek() + 1) ? 'proposal' : 'forecast', level: lvl };
 }
 function vWeek() {
   $('#title').textContent = 'השבוע'; const t = todayIso(), cw = curWeek(), wn = Math.min(16, Math.max(0, viewWeek == null ? cw : viewWeek)), hasW0 = st.sessions.some(x => x.week === 0);
@@ -128,12 +137,12 @@ function vWeek() {
     });
     h += '</div></div>';
   });
-  h += '<div class="row">' + (wn === Math.max(cw, 1) ? '<button class="b coral" data-act="plan" data-wn="' + wn + '">' + (r.kind === 'real' ? 'תכנון מחדש של השבוע' : 'תכנון השבוע') + '</button>' : '') + '<button class="b alt" data-act="allweeks">כל השבועות</button>' + (wn !== cw ? '<button class="b alt" data-act="weekgo" data-wn="' + cw + '">לשבוע הנוכחי</button>' : '') + '</div></div>';
+  h += '<div class="row">' + ((wn >= 1 && (wn === cw || wn === cw + 1)) ? '<button class="b coral" data-act="plan" data-wn="' + wn + '">' + (r.kind === 'real' ? 'תכנון מחדש של השבוע' : 'תכנון השבוע') + '</button>' : '') + '<button class="b alt" data-act="allweeks">כל השבועות</button>' + (wn !== cw ? '<button class="b alt" data-act="weekgo" data-wn="' + cw + '">לשבוע הנוכחי</button>' : '') + '</div></div>';
   h += '<div class="card"><h3>רשמת משחק או פעילות אחרת?</h3><div class="mut">טניס, כדורסל וכדומה. אפשר שזה יחליף ריצה קלה.</div><div class="row"><button class="b alt" data-act="activity">רישום פעילות</button>' + (NATIVE ? '' : '<button class="b alt" data-act="ics">עדכון יומן (לא חובה)</button>') + '</div></div>';
   $('#main').innerHTML = h;
 }
 function allWeeksSheet() {
-  const cw = curWeek(); let h = '<h2>כל השבועות</h2><div class="mut">שבוע מתחיל בשישי. המרוץ: שישי 19.3.</div>';
+  const cw = curWeek(); let h = '<h2>כל השבועות</h2><div class="mut">שבוע מתחיל בשבת ונגמר בשישי. בכל שישי מתכננים את השבוע הבא. המרוץ: שישי 19.3, היום האחרון של שבוע 16.</div>';
   for (let w = st.sessions.some(x => x.week === 0) ? 0 : 1; w <= 16; w++) {
     const r = weekRows(w), lvl = r.kind === 'real' ? (r.list[0] ? r.list[0].level : st.level) : r.level, long = r.list.find(s => s.kind === 'long') || r.list.find(s => s.kind === 'easy1');
     const x = E.weekStats(st, w), status = r.kind === 'real' ? (w < cw ? 'בוצע ' + x.runCredit + ' מתוך ' + x.runPlanned + ' ריצות' : 'מתוכנן') : (r.kind === 'proposal' ? 'הצעה' : 'תחזית');
@@ -250,7 +259,7 @@ function optionsSheet(sid, reason) {
 let plan = { wn: 1, review: null, props: null };
 function planSheet(wn) {
   plan.wn = wn; plan.review = null;
-  if (wn > 1 && st.plannedWeeks.indexOf(wn - 1) >= 0 && !st.reviews.some(r => r.week === wn - 1)) E.closeWeek(st, wn - 1);
+  if (wn > 1 && st.plannedWeeks.indexOf(wn - 1) >= 0 && !st.reviews.some(r => r.week === wn - 1)) E.closeWeek(st, wn - 1, todayIso());
   const rv = st.reviews.find(r => r.week === wn - 1), t = todayIso(), dates = E.weekDates(wn);
   let h = '<h2>תכנון שבוע ' + wn + '</h2>';
   if (rv && wn > 1) { const x = E.weekStats(st, wn - 1); h += '<div class="card"><h3>סיכום שבוע ' + (wn - 1) + '</h3><div>ריצות: ' + x.runCredit + ' מתוך ' + x.runPlanned + ' · כוח: ' + x.strCredit + ' מתוך ' + x.strPlanned + (x.avgRpe ? ' · מאמץ ממוצע ' + x.avgRpe.toFixed(1) : '') + '</div><div class="mut">' + esc(rv.why) + (rv.to !== rv.from ? ' (שלב ' + rv.from + ' ← ' + rv.to + ')' : ' (נשארים בשלב ' + rv.to + ')') + '</div></div>'; }
@@ -395,7 +404,7 @@ async function scheduleNative() {
     for (let d = today; d <= end; d = E.addDays(d, 1)) {
       const wn = E.weekNo(d);
       if (E.dow(d) === wd && !live[d] && st.plannedWeeks.indexOf(wn) >= 0 && !weighedThatWeek(d)) add(200000 + wn, at(d, st.settings.reminder), '⚖️ שקילה שבועית', 'מספר אחד אחרי הנקודה, למשל 108.4', '');
-      if (E.dow(d) === 5 && d < E.CFG.race && wn >= 1) add(300000 + wn, at(d, st.settings.weighTime), '📅 תכנון השבוע', 'פתח את האפליקציה, סכם את השבוע שעבר ותכנן את הבא.', '');
+      if (E.dow(d) === 5 && d < E.CFG.race && wn + 1 >= 1) add(300000 + wn + 1, at(d, st.settings.weighTime), '📅 תכנון השבוע הבא', 'פתח את האפליקציה, סכם את השבוע ותכנן את השבוע הבא (שבת עד שישי).', '');
     }
     if (list.length) await ln.schedule({ notifications: list });
   } catch (e) { console.warn(e); }

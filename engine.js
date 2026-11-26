@@ -2,7 +2,7 @@
 (function (root) {
 'use strict';
 const DAY = 864e5;
-const CFG = { firstDay: '2026-11-25', start: '2026-11-27', race: '2027-03-19', lastWeek: 16, startWeight: 111, startWeightDate: '2026-11-25', heightCm: 182 };
+const CFG = { firstDay: '2026-11-25', start: '2026-11-28', race: '2027-03-19', lastWeek: 16, startWeight: 111, startWeightDate: '2026-11-25', heightCm: 182 };
 const DAYNAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
 /* ---------- תאריכים (UTC, כדי שלא יהיו קפיצות שעון קיץ) ---------- */
@@ -11,7 +11,7 @@ function iso(t) { return new Date(t).toISOString().slice(0, 10); }
 function addDays(s, n) { return iso(pd(s) + n * DAY); }
 function dow(s) { return new Date(pd(s)).getUTCDay(); }           // 0=ראשון ... 5=שישי, 6=שבת
 function diff(a, b) { return Math.round((pd(b) - pd(a)) / DAY); }
-function weekStart(s) { return addDays(s, -((dow(s) - 5 + 7) % 7)); } // שבוע מתחיל בשישי
+function weekStart(s) { return addDays(s, -((dow(s) - 6 + 7) % 7)); } // שבוע מתחיל בשבת ונגמר בשישי
 function weekNo(s) { return Math.floor(diff(CFG.start, weekStart(s)) / 7) + 1; }
 function weekDatesVisible(n) { return weekDates(n).filter(d => n !== 0 || d >= CFG.firstDay); }
 function weekStartOf(n) { return addDays(CFG.start, (n - 1) * 7); }
@@ -125,9 +125,9 @@ function segmentsFor(s) {
 /* ---------- מצב התחלתי ---------- */
 function newState() {
   return {
-    v: 1,
+    v: 2,
     settings: { reminder: '17:00', weighTime: '10:00', weighDay: 2, heightCm: CFG.heightCm, targetKg: null, notify: false },
-    level: 1, sessions: [{ id: 'race', week: 17, kind: 'race', date: CFG.race, level: 16, status: 'planned', seq: 0 }],
+    level: 1, sessions: [{ id: 'race', week: 16, kind: 'race', date: CFG.race, level: 16, status: 'planned', seq: 0 }],
     activities: [], weights: [{ date: '2026-11-18', kg: 113.6, start: true }, { date: CFG.startWeightDate, kg: CFG.startWeight }], reviews: [], painLog: [], plannedWeeks: []
   };
 }
@@ -251,9 +251,9 @@ function reviewWeek(st, wn) {
   else { why = 'חלק מהריצות לא בוצעו, לכן חוזרים על אותו שלב ולא קופצים קדימה.'; }
   return { from, to, why, stats: x, week: wn };
 }
-function closeWeek(st, wn) { // סוגר את השבוע שהסתיים: אימונים שלא בוצעו נחשבים לא בוצעו, ושלב חדש
+function closeWeek(st, wn, today) { // סוגר שבוע: אימונים שעברו ולא בוצעו נחשבים לא בוצעו, ושלב חדש. אימון של היום (שישי) נשאר פתוח
   if (st.reviews.some(r => r.week === wn)) return st.reviews.find(r => r.week === wn);
-  st.sessions.forEach(s => { if (s.week === wn && s.status === 'planned') { s.status = 'skipped'; s.seq = (s.seq || 0) + 1; } });
+  st.sessions.forEach(s => { if (s.week === wn && s.status === 'planned' && (!today || s.date < today)) { s.status = 'skipped'; s.seq = (s.seq || 0) + 1; } });
   const r = reviewWeek(st, wn);
   st.level = r.to; st.reviews.push({ week: wn, from: r.from, to: r.to, why: r.why });
   return r;
@@ -413,9 +413,9 @@ function buildICS(st, today) {
   for (let d = today; d < CFG.race; d = addDays(d, 1)) {   // יום שקילה בלי אימון באותו יום: תזכורת נפרדת
     if (dow(d) === wd && !live[d] && st.plannedWeeks.indexOf(weekNo(d)) >= 0) ev('weigh-' + d, 0, d, st.settings.reminder, '⚖️ שקילה שבועית', WTXT, false);
   }
-  for (let n = 1; n <= CFG.lastWeek + 1; n++) {
-    const d = weekStartOf(n); if (d < today) continue;
-    ev('plan-' + d, 0, d, st.settings.weighTime, '📅 תכנון השבוע', 'לפתוח את האפליקציה, לסכם את השבוע שעבר ולתכנן את הבא.', false);
+  for (let n = 1; n <= CFG.lastWeek; n++) {   // בכל שישי מתכננים את השבוע שמתחיל מחר (שבת)
+    const d = addDays(weekStartOf(n), -1); if (d < today) continue;
+    ev('plan-' + d, 0, d, st.settings.weighTime, '📅 תכנון השבוע הבא', 'לפתוח את האפליקציה, לסכם את השבוע ולתכנן את השבוע הבא (שבת עד שישי).', false);
   }
   L.push('END:VCALENDAR');
   return L.join('\r\n');
